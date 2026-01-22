@@ -4,14 +4,18 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.5.1.0",
-  build: "B034",
+  version: "v.6.0.0",
+  build: "B035",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1768650746,
+  unix: 1769103479,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
+      "Update VC of /gamerule",
+      "Add general VC for all commands"
+      // New about page
+      // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
@@ -19,15 +23,25 @@ const version_info = {
       "Added /agent",
       "The time zone can now be set from the History menu.",
       "Commands are now labeled alphabetically in the Visual Command Overview.",
-      "Show more now works more reliabel."
+      "Show more now works more reliabel.",
+      "Removed the data parameter from /fill, /setblock & /testforblock commands in the database.",
+      "Removed /tp & /camera in the database for now due to issues.",
+      "Removed /weather & /summon as visual commands.",
+      "Removed the ablity to toggle Visual Commands off"
+      // Add parallel syntaxes and cain syntaxes
     ],
     // bug_fixes
     bug_fixes: [
+      "Device time zone detection improved",
+      "Main menu preference button will now show corectly.",
       "Recommended Commands will now stack corectly",
       "Fixed & Readded aliases: gm & experience",
       "Fixed a bug where in some cases, the Visual Command of effect could not be opened.",
       "Resolved a bug causing hidden Visual Commands to show up as suggestions after an invalid comment input.",
-      "Fixed a bug crash when the save data exceeded a certain size."
+      "Fixed a bug crash when the save data exceeded a certain size.",
+      "The sorting algorithm for the Permission menu has been improved.",
+      "Fixed /event in the database",
+      "Fixed the go back button in gestures while multiple menus (host) was initiated.",
     ]
 
   }
@@ -43,7 +57,7 @@ console.log("Hello from " + version_info.name + " - "+version_info.version+" ("+
 const links = [
   {name: "§l§5Github:§r", link: "github.com/TheFelixLive/Command2Hardcore"},
   {name: "§l§7Curseforge:§r", link: "curseforge.com/projects/1277546"},
-  {name: "§l§aMcpedl:§r", link: "mcpedl.com/com2hard"}
+  {name: "§l§aMcpedl:§r", link: "mcpedl.com/commandandachievements"}
 
 ]
 
@@ -476,57 +490,57 @@ const entity_exceptionlist = {
 }
 
 const gamerules = [
-  { key: "commandBlockOutput", type: "boolean", tooltip: "Command blocks output messages to operators." },
-  { key: "commandBlocksEnabled", type: "boolean", tooltip: "Command blocks are enabled." },
-  { key: "doDayLightCycle", type: "boolean", tooltip: "The daylight cycle progresses naturally." },
-  { key: "doEntityDrops", type: "boolean", tooltip: "Entities drop items when destroyed." },
-  { key: "doFireTick", type: "boolean", tooltip: "Fire spreads and extinguishes naturally." },
-  { key: "doImmediateRespawn", type: "boolean", tooltip: "players respawn immediately without death screen." },
-  { key: "doInsomnia", type: "boolean", tooltip: "Phantoms spawn when players haven’t slept." },
-  { key: "doLimitedCrafting", type: "boolean", tooltip: "Only unlocked recipes can be crafted." },
-  { key: "doMobLoot", type: "boolean", tooltip: "Mobs drop loot on death." },
-  { key: "doMobSpawning", type: "boolean", tooltip: "Mobs spawn naturally." },
-  { key: "doTileDrops", type: "boolean", tooltip: "Blocks drop items when broken." },
-  { key: "doWeatherCycle", type: "boolean", tooltip: "Weather changes naturally." },
+  { id: "commandBlockOutput", type: "boolean", tooltip: "Command blocks output messages to operators.", name: "Command Blocks send Feedback", default: true },
+  { id: "commandBlocksEnabled", type: "boolean", tooltip: "Command blocks are enabled.", name: "Command Blocks", default: true },
+  { id: "doDayLightCycle", type: "boolean", tooltip: "The daylight cycle progresses naturally.", name: "Daylight Cycle", default: true },
+  { id: "doEntityDrops", type: "boolean", tooltip: "Entities drop items when destroyed.", name: "Objects drop Items", default: true },
+  { id: "doFireTick", type: "boolean", tooltip: "Fire spreads and extinguishes naturally.", name: "Fire spreads", default: true },
+  { id: "doImmediateRespawn", type: "boolean", tooltip: "players respawn immediately without death screen.", name: "Immediate Respawn after a death", default: false },
+  { id: "doInsomnia", type: "boolean", tooltip: "Phantoms spawn when players haven’t slept.", name: "Phantoms can spawn", default: true },
+  { id: "doLimitedCrafting", type: "boolean", tooltip: "Only unlocked recipes can be crafted.", name: "Limited Crafting", default: false },
+  { id: "doMobLoot", type: "boolean", tooltip: "Mobs drop loot on death.", name: "Mobs drop Loot", default: true },
+  { id: "doMobSpawning", type: "boolean", tooltip: "Mobs spawn naturally.", name: "Mobs spawn", default: true },
+  { id: "doTileDrops", type: "boolean", tooltip: "Blocks drop items when broken.", name: "Blocks drop Items", default: true },
+  { id: "doWeatherCycle", type: "boolean", tooltip: "Weather changes naturally.", name: "Weather Cycle", default: true },
 
-  { key: "drowningDamage", type: "boolean", tooltip: "players take damage from drowning." },
-  { key: "fallDamage", type: "boolean", tooltip: "players take fall damage." },
-  { key: "fireDamage", type: "boolean", tooltip: "players take damage from fire." },
-  { key: "freezeDamage", type: "boolean", tooltip: "players take damage from freezing." },
+  { id: "drowningDamage", type: "boolean", tooltip: "players take damage from drowning.", name: "Drowning Damage", default: true },
+  { id: "fallDamage", type: "boolean", tooltip: "players take fall damage.", name: "Fall Damage", default: true },
+  { id: "fireDamage", type: "boolean", tooltip: "players take damage from fire.", name: "Fire Damage", default: true },
+  { id: "freezeDamage", type: "boolean", tooltip: "players take damage from freezing.", name: "Freeze Damage", default: true },
 
-  { key: "functionCommandLimit", type: "numberText", tooltip: "Max number of commands a function can run." },
+  { id: "functionCommandLimit", type: "numberText", tooltip: "Max number of commands a function can run.", name: "Function Command Limit", default: 10000 },
 
-  { key: "keepInventory", type: "boolean", tooltip: "players keep inventory after death." },
-  { key: "maxCommandChainLength", type: "numberText", tooltip: "Maximum number of commands in a command chain." },
+  { id: "keepInventory", type: "boolean", tooltip: "players keep inventory after death.", name: "Keep Inventory on Death", default: false },
+  { id: "maxCommandChainLength", type: "numberText", tooltip: "Maximum number of commands in a command chain.", name: "Max Command Chain Length", default: 65536 },
 
-  { key: "mobGriefing", type: "boolean", tooltip: "Mobs can modify the world (e.g., Creepers explode blocks)." },
-  { key: "naturalRegeneration", type: "boolean", tooltip: "players regenerate health naturally." },
+  { id: "mobGriefing", type: "boolean", tooltip: "Mobs can modify the world (e.g., Creepers explode blocks).", name: "Mobs can modify the Blocks", default: true },
+  { id: "naturalRegeneration", type: "boolean", tooltip: "players regenerate health naturally.", name: "Natural Health Regeneration", default: true },
 
-  { key: "playersSleepingPercentage", type: "slider", min: 0, max: 100, step: 1, tooltip: "Percent of players required to sleep to skip the night." },
+  { id: "playersSleepingPercentage", type: "slider", min: 0, max: 100, step: 1, tooltip: "Percent of players required to sleep to skip the night.", name: "Players Sleeping Percentage", default: 100 },
 
-  { key: "projectilesCanBreakBlocks", type: "boolean", tooltip: "Projectiles can break blocks." },
-  { key: "pvp", type: "boolean", tooltip: "players can damage each other (PvP enabled)." },
+  { id: "projectilesCanBreakBlocks", type: "boolean", tooltip: "Projectiles can break blocks.", name: "Projectiles can break Blocks", default: false },
+  { id: "pvp", type: "boolean", tooltip: "players can damage each other (PvP enabled).", name: "Player vs. Player Combat (PvP)", default: true },
 
-  { key: "randomTickSpeed", type: "slider", min: 0, max: 1000, step: 1, tooltip: "Rate of random ticks (affects growth, fire, etc.)." },
+  { id: "randomTickSpeed", type: "slider", min: 0, max: 1000, step: 1, tooltip: "Rate of random ticks (affects growth, fire, etc.).", name: "Random Tick Speed", default: 1 },
 
-  { key: "recipesUnlock", type: "boolean", tooltip: "Recipes unlock automatically as you progress." },
-  { key: "respawnBlocksExplode", type: "boolean", tooltip: "Respawn anchors explode when used improperly." },
-  { key: "sendCommandFeedback", type: "boolean", tooltip: "Feedback from commands appears in chat." },
-  { key: "showBorderEffect", type: "boolean", tooltip: "World border visual effect is visible." },
-  { key: "showCoordinates", type: "boolean", tooltip: "Displays coordinates in the HUD." },
-  { key: "showDaysPlayed", type: "boolean", tooltip: "Displays the number of in-game days played." },
-  { key: "showDeathMessages", type: "boolean", tooltip: "Death messages are displayed in chat." },
-  { key: "showRecipeMessages", type: "boolean", tooltip: "Recipe unlock messages are shown." },
-  { key: "showTags", type: "boolean", tooltip: "Entity tags are shown (debug)." },
+  { id: "recipesUnlock", type: "boolean", tooltip: "Recipes unlock automatically as you progress.", name: "Automatic Recipe Unlocking", default: true },
+  { id: "respawnBlocksExplode", type: "boolean", tooltip: "Respawn anchors explode when used improperly.", name: "Respawn anchors can explode", default: true },
+  { id: "sendCommandFeedback", type: "boolean", tooltip: "Feedback from commands appears in chat.", name: "Command Feedback in Chat", default: true },
+  { id: "showBorderEffect", type: "boolean", tooltip: "World border visual effect is visible.", name: "Border Block Effect", default: true },
+  { id: "showCoordinates", type: "boolean", tooltip: "Displays coordinates in the HUD.", name: "Coordinates in HUD", default: false },
+  { id: "showDaysPlayed", type: "boolean", tooltip: "Displays the number of in-game days played.", name: "Days Played in HUD", default: false },
+  { id: "showDeathMessages", type: "boolean", tooltip: "Death messages are displayed in chat.", name: "Death Messages in Chat", default: true },
+  { id: "showRecipeMessages", type: "boolean", tooltip: "Recipe unlock messages are shown.", name: "Recipe Unlock Messages", default: true },
+  { id: "showTags", type: "boolean", tooltip: "Entity tags are shown.", name: "Show Item restrictions", default: true },
 
-  { key: "spawnRadius", type: "slider", min: 0, max: 100, step: 1, tooltip: "Spawn radius from the world spawn point." },
+  { id: "spawnRadius", type: "slider", min: 0, max: 100, step: 1, tooltip: "Spawn radius from the world spawn point.", name: "Spawn Radius", default: 10 },
 
-  { key: "tntExplodes", type: "boolean", tooltip: "TNT can explode." },
-  { key: "tntExplosionDropDecay", type: "boolean", tooltip: "Explosions reduce the amount of dropped items." }
+  { id: "tntExplodes", type: "boolean", tooltip: "TNT can explode.", name: "TNT Explodes", default: true },
+  { id: "tntExplosionDropDecay", type: "boolean", tooltip: "Explosions reduce the amount of dropped items.", name: "Reduces items dropped by explosions", default: true }
 ];
 
 const command_list = [
-  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, enum
+  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, enum, (gameruletype)
 
   {
     name: "agent",
@@ -696,7 +710,6 @@ const command_list = [
       { type: "location", name: "from" },
       { type: "location", name: "to" },
       { type: "blocktype", name: "block" },
-      { type: "string", name: "data", optional: true },
       {
         type: "enum",
         name: "mode",
@@ -709,8 +722,7 @@ const command_list = [
           {
             value: "replace",
             next: [
-              { type: "blocktype", name: "oldBlock", optional: true },
-              { type: "string", name: "oldData", optional: true }
+              { type: "blocktype", name: "oldBlock"}
             ]
           }
         ]
@@ -728,7 +740,7 @@ const command_list = [
       if (anyplayerHasEffect()) visual_command_effect_select(player);
       else visual_command_effect_add(player);
     },
-
+    vc_available: (player) => true,
     syntaxes: [
       { type: "literal", value: "/effect" },
       { type: "entityselector", name: "target" },
@@ -760,7 +772,6 @@ const command_list = [
     aliases: ["summon"],
     description: "Summons an entity",
     textures: "textures/items/spawn_eggs/spawn_egg_creeper",
-    vc_hiperlink: (player) => all_EntityTypes(player),
     syntaxes: [
       { type: "literal", value: "/summon" },
       { type: "entityType", name: "entityType" },
@@ -769,6 +780,7 @@ const command_list = [
     ]
   },
 
+  /* // Disabled teleport & camera command for now since both of them require parallel syntaxes (multiple types at ones have to be valid) which are not yet supported!
   {
     name: "teleport",
     recommended: (player) => isFarthestPlayerFarAway(player, 300),
@@ -796,7 +808,7 @@ const command_list = [
               { type: "float", name: "xRot", optional: true },
               { type: "bool", name: "checkForBlocks", optional: true },
               {
-                type: "literal",
+                type: "enum",
                 value: "facing",
                 optional: true,
                 next: [
@@ -810,87 +822,6 @@ const command_list = [
       }
     ]
   },
-
-  {
-    name: "playsound",
-    aliases: ["playsound"],
-    textures: "textures/ui/sound_glyph_color_2x",
-    description: "Play a sound",
-    syntaxes: [
-      { type: "literal", value: "/playsound" },
-      { type: "string", name: "sound" },
-      { type: "playerselector", name: "targets", optional: true },
-      { type: "location", name: "pos", optional: true },
-      { type: "float", name: "volume", optional: true },
-      { type: "float", name: "pitch", optional: true }
-    ]
-  },
-
-  {
-    name: "setblock",
-    aliases: ["setblock"],
-    description: "Set block at coordinates",
-    syntaxes: [
-      { type: "literal", value: "/setblock" },
-      { type: "location", name: "pos" },
-      { type: "blocktype", name: "block" },
-      { type: "string", name: "data", optional: true },
-      {
-        type: "enum",
-        name: "mode",
-        optional: true,
-        value: [{ value: "destroy" }, { value: "keep" }, { value: "replace" }]
-      }
-    ]
-  },
-
-  {
-    name: "weather",
-    aliases: ["weather"],
-    textures: "textures/ui/cloud_only_storage",
-    vc_hiperlink: (player) => visual_command_weather(player),
-    recommended: (player) => false, //world.getDimension("overworld").getWeather() !== WeatherType.Clear,
-    description: "Set or query the weather",
-    syntaxes: [
-      { type: "literal", value: "/weather" },
-      { type: "weathertype", name: "type", optional: true },
-      { type: "int", name: "duration", optional: true }
-    ]
-  },
-
-  {
-    name: "help",
-    aliases: ["help", "?"],
-    textures: "textures/ui/icons/icon_staffpicks",
-    cc_hidden: true,
-    description: "Show help for commands or a specific command",
-    syntaxes: [
-      { type: "literal", value: "/help" },
-      { type: "string", name: "command", optional: true }
-    ]
-  },
-
-  {
-    name: "alwaysday",
-    aliases: ["alwaysday"],
-    description: "Toggle alwaysday",
-    syntaxes: [
-      { type: "literal", value: "/alwaysday" },
-      { type: "bool", name: "enabled", optional: true }
-    ]
-  },
-
-  {
-    name: "daylock",
-    aliases: ["daylock"],
-    txtures: "textures/ui/lock_color",
-    description: "Lock/unlock the time of day",
-    syntaxes: [
-      { type: "literal", value: "/daylock" },
-      { type: "bool", name: "enabled", optional: true }
-    ]
-  },
-
   {
     name: "camera",
     aliases: ["camera"],
@@ -925,7 +856,6 @@ const command_list = [
 
               // optional: ease <easeTime: float> <easeType: Easing>
               {
-                type: "literal",
                 value: "ease",
                 optional: true,
                 next: [
@@ -1119,6 +1049,76 @@ const command_list = [
     ] // end syntaxes
   },
 
+  */
+
+  {
+    name: "playsound",
+    aliases: ["playsound"],
+    textures: "textures/ui/sound_glyph_color_2x",
+    description: "Play a sound",
+    syntaxes: [
+      { type: "literal", value: "/playsound" },
+      { type: "string", name: "sound" },
+      { type: "playerselector", name: "targets", optional: true },
+      { type: "location", name: "pos", optional: true },
+      { type: "float", name: "volume", optional: true },
+      { type: "float", name: "pitch", optional: true }
+    ]
+  },
+
+  {
+    name: "setblock",
+    aliases: ["setblock"],
+    description: "Set block at coordinates",
+    syntaxes: [
+      { type: "literal", value: "/setblock" },
+      { type: "location", name: "pos" },
+      { type: "blocktype", name: "block" },
+      {
+        type: "enum",
+        name: "mode",
+        optional: true,
+        value: [{ value: "destroy" }, { value: "keep" }, { value: "replace" }]
+      }
+    ]
+  },
+
+  {
+    name: "weather",
+    aliases: ["weather"],
+    textures: "textures/ui/cloud_only_storage",
+    recommended: (player) => false, //world.getDimension("overworld").getWeather() !== WeatherType.Clear,
+    description: "Set or query the weather",
+    syntaxes: [
+      { type: "literal", value: "/weather" },
+      { type: "weathertype", name: "type", optional: true },
+      { type: "int", name: "duration", optional: true }
+    ]
+  },
+
+  {
+    name: "help",
+    aliases: ["help", "?"],
+    textures: "textures/ui/icons/icon_staffpicks",
+    cc_hidden: true,
+    description: "Show help for commands or a specific command",
+    syntaxes: [
+      { type: "literal", value: "/help" },
+      { type: "string", name: "command", optional: true }
+    ]
+  },
+
+  {
+    name: "daylock",
+    aliases: ["daylock", "alwaysday"],
+    txtures: "textures/ui/lock_color",
+    description: "Lock/unlock the time of day",
+    syntaxes: [
+      { type: "literal", value: "/daylock" },
+      { type: "bool", name: "enabled"}
+    ]
+  },
+
   {
     name: "clear",
     recommended: (player) => getStackCount(player) > 10,
@@ -1129,7 +1129,7 @@ const command_list = [
       { type: "literal", value: "/clear" },
       { type: "playerselector", name: "player", optional: true },
       { type: "itemtype", name: "item", optional: true },
-      { type: "int", name: "data", optional: true }
+      { type: "int", name: "count", optional: true }
     ]
   },
 
@@ -1214,6 +1214,7 @@ const command_list = [
     aliases: ["enchant"],
     textures: "textures/items/book_enchanted",
     vc_hiperlink: (player) => visual_command_enchant(player),
+    vc_available: (player) => true,
     visible: (player) => getCompatibleEnchantmentTypes(player.getComponent("minecraft:inventory")?.container?.getItem(player.selectedSlotIndex)).length > 0,
     recommended: (player) => {
       const firstWithEnchantable = world
@@ -1241,8 +1242,19 @@ const command_list = [
     description: "Trigger a game event",
     syntaxes: [
       { type: "literal", value: "/event" },
-      { type: "string", name: "eventName" },
-      { type: "entityselector", name: "target", optional: true }
+      {
+        type: "enum",
+        name: "entity",
+        value: [
+          {
+            value: "entity",
+            next: [
+              { type: "entityselector", name: "targetEntity" },
+              { type: "string", name: "eventName" },
+            ]
+          }
+        ]
+      }
     ]
   },
 
@@ -1411,6 +1423,7 @@ const command_list = [
     textures: "textures/ui/permissions_op_crown",
     description: "Set a player's game mode",
     vc_hiperlink: (player) => visual_command_gamemode(player),
+    vc_available: (player) => true,
     visible: (player) => world.isHardcore === false,
     recommended: (player) => {
       const gm = player.getGameMode();
@@ -1427,24 +1440,41 @@ const command_list = [
     ]
   },
 
+  /* // Legacy gamerule command disabled
   {
     name: "gamerule",
     aliases: ["gamerule"],
     cc_hidden: true,
     textures: "textures/ui/settings_pause_menu_icon",
     vc_hiperlink: (player) =>
-      version_info.release_type < 2
-        ? (load_save_data().find(entry => entry.id === player.id)?.quick_run
-            ? visual_command_gamerule(player)
-            : visual_command_gamerule_quick_run(player))
-        : undefined,
+      load_save_data().find(entry => entry.id === player.id)?.quick_run ?
+       visual_command_gamerule(player) : visual_command_gamerule_quick_run(player),
+    vc_available: (player) => version_info.release_type < 2,
     description: "Set or query a gamerule",
     syntaxes: [
       { type: "literal", value: "/gamerule" },
       { type: "string", name: "rule" },
-      { type: "string", name: "value", optional: true }
+      { type: "string", name: "value" }
     ]
   },
+  */
+
+  { // New gamerule command
+    name: "gamerule",
+    aliases: ["gamerule"],
+    cc_hidden: true,
+    textures: "textures/ui/settings_pause_menu_icon",
+    vc_hiperlink: (player) => visual_command_gamerule_new(player),
+    recommended: (player) => world.gameRules.randomTickSpeed > 100,
+    vc_available: (player) => true,
+    description: "Set a gamerule",
+    syntaxes: [
+      { type: "literal", value: "/gamerule" },
+      { type: "gameruletype", name: "rule" },
+      { type: "string", name: "value" }
+    ]
+  },
+
 
   {
     name: "hud",
@@ -2174,8 +2204,7 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "/testforblock" },
       { type: "location", name: "pos" },
-      { type: "blocktype", name: "block" },
-      { type: "string", name: "data", optional: true }
+      { type: "blocktype", name: "block" }
     ]
   },
 
@@ -2199,8 +2228,7 @@ const command_list = [
           {
             value: "filtered",
             next: [
-              { type: "blocktype", name: "filterBlock", optional: true },
-              { type: "string", name: "filterData", optional: true }
+              { type: "blocktype", name: "filterBlock", optional: true }
             ]
           }
         ]
@@ -2267,6 +2295,7 @@ const command_list = [
     textures: "textures/items/clock_item",
     description: "Change or query the time",
     vc_hiperlink: (player) => visual_command_time(player),
+    vc_available: (player) => true,
     recommended: (player) => !(world.getTimeOfDay() < 12000),
     syntaxes: [
       { type: "literal", value: "/time" },
@@ -2636,38 +2665,6 @@ const command_list = [
     ]
   },
 
-  {
-    name: "transfer",
-    aliases: ["transfer"],
-    textures: "textures/ui/realmsIcon",
-    description: "Transfer a player to another server (proxy/bedrock linking)",
-    syntaxes: [
-      { type: "literal", value: "/transfer" },
-      { type: "playerselector", name: "player" },
-      { type: "string", name: "address" },
-      { type: "int", name: "port", optional: true },
-      { type: "string", name: "password", optional: true }
-    ]
-  },
-
-  {
-    name: "wsserver",
-    aliases: ["wsserver"],
-    description: "Start/stop/query the WebSocket server",
-    textures: "textures/ui/ui_debug_glyph_color",
-    syntaxes: [
-      { type: "literal", value: "/wsserver" },
-      {
-        type: "enum",
-        name: "action",
-        value: [
-          { value: "start", next: [{ type: "int", name: "port", optional: true }] },
-          { value: "stop" },
-          { value: "status" }
-        ]
-      }
-    ]
-  }
 ];
 
 let block_command_list = [
@@ -2900,6 +2897,7 @@ function registerAllCommands(init) {
             }
 
             function formatArg(v) {
+              print("Format Arg:" + v);
               if (v === null) return "null";
               if (v === undefined) return "undefined";
 
@@ -2918,15 +2916,14 @@ function registerAllCommands(init) {
 
                 if (v.hasOwnProperty("id")) {
 
-                  if (Number(v.id)) {  // Prüft, ob es wirklich eine Zahl ist
-                      // Spieler prüfen
+                  if (Number(v.id)) {
                       const player = world.getAllPlayers().find(entity => entity.id === v.id);
                       if (player) return String(player.name);
 
                       // Entitys
                       const entity = world.getEntity(v.id);
                       if (entity) {
-                          return `@e[x=${entity.location.x},y=${entity.location.y},z=${entity.location.z}, r=20, type=!player, c=1]`;
+                          return `@e[x=${entity.location.x}, y=${entity.location.y}, z=${entity.location.z}, r=20, type=!player, c=1]`;
                       }
                   }
 
@@ -3247,7 +3244,6 @@ function create_player_save_data(playerId, playerName) {
       gesture: { emote: false, sneak: true, nod: true, stick: true },
       command_history: [],
       quick_run: false,
-      visual_command: true,
       recommendations: true,
       chain_commands: [],
       ui_preferences: "chain",
@@ -3691,6 +3687,19 @@ function isCommandAvailable(player, cmd) {
   return playerAllowed.includes(cmdIndex);
 }
 
+function isVisualCommandAvailable(player, cmd) {
+  if (typeof cmd.vc_available === "function" && !cmd.vc_available(player)) {
+    return null;
+  }
+
+  if (typeof cmd.vc_hiperlink !== "function") {
+    return null;
+  }
+
+  return (player) => cmd.vc_hiperlink(player);
+}
+
+
 function generate_command_lists(player, use_recomandations = true) {
   const recommendedEntries = [];
   const optimizedEntries = [];
@@ -3706,6 +3715,7 @@ function generate_command_lists(player, use_recomandations = true) {
 
   for (const cmd of command_list) {
     let visible = true;
+    visible = isCommandAvailable(player, `/${cmd.name}`);
 
     if (typeof cmd.visible === "function") {
       visible = !!cmd.visible(player);
@@ -3713,9 +3723,7 @@ function generate_command_lists(player, use_recomandations = true) {
       visible = cmd.visible;
     }
 
-    if (isCommandAvailable(player, `/${cmd.name}`) === false) {
-      visible = false;
-    }
+    let isVC = isVisualCommandAvailable(player, cmd)
 
     if (!visible) continue;
 
@@ -3734,13 +3742,14 @@ function generate_command_lists(player, use_recomandations = true) {
 
     // action function
     const actionFn = () => {
-      if (typeof cmd.vc_hiperlink === "function" && save_data[player_sd_index].visual_command) {
-        const inner = cmd.vc_hiperlink(player);
-        if (typeof inner === "function") inner();
+      if (isVC) {
+        return isVC(player);
       } else {
-        command_menu(player, `/${cmd.name}`);
+        return visual_command_generic(player, cmd);
       }
     };
+
+
 
     // --- Kategorisierung ---
     if (recommendedFlag && use_recomandations) {
@@ -3749,7 +3758,7 @@ function generate_command_lists(player, use_recomandations = true) {
       continue;
     }
 
-    if (typeof cmd.vc_hiperlink === "function" && save_data[player_sd_index].visual_command) {
+    if (isVC) {
       addTo(allEntries, cmd.name, cmd.textures, actionFn);
       addTo(optimizedEntries, cmd.name, cmd.textures, actionFn);
       continue;
@@ -3774,15 +3783,117 @@ function generate_command_lists(player, use_recomandations = true) {
   };
 }
 
-async function chain_text_input(player, input) {
+async function menu_text_input(player, input) {
   const form = new ModalFormData();
   form.title(input.title);
-  form.textField(input.prompt, input.placeholder || "", {
-    defaultValue: input.defaultValue || "",
-    tooltip: input.tooltip || ""
-  });
-  return form.show(player);
+  form.textField(
+    input.prompt,
+    input.placeholder || "",
+    {
+      defaultValue: input.defaultValue || "",
+      tooltip: input.tooltip || ""
+    }
+  );
+
+  if (input.optional) {
+    form.toggle("Skip", { tooltip: "Enable to skip this input" });
+  }
+
+  const response = await form.show(player);
+
+  if (response.isCanceled) return -1;
+
+  return {
+    response: response.formValues[0],
+    canceled: response.formValues[0] == "",
+    skipped: input.optional ? response.formValues[1] : false
+  };
 }
+
+async function menu_location_input(player, input) {
+  const form = new ModalFormData();
+  form.title(input.title);
+  form.label(input.prompt || "");
+  form.textField(
+    "X:",
+    String(Math.floor(player.location.x)) || "",
+    {
+      defaultValue: String(Math.floor(player.location.x)) || "",
+      tooltip: input.tooltip || ""
+    }
+  );
+
+  form.textField(
+    "Y:",
+    String(Math.floor(player.location.y)) || "",
+    {
+      defaultValue: String(Math.floor(player.location.y)) || "",
+      tooltip: input.tooltip || ""
+    }
+  );
+
+  form.textField(
+    "Z:",
+    String(Math.floor(player.location.z)) || "",
+    {
+      defaultValue: String(Math.floor(player.location.z)) || "",
+      tooltip: input.tooltip || ""
+    }
+  );
+
+  if (input.optional) {
+    form.toggle("Skip", { tooltip: "Enable to skip this input" });
+  }
+
+  const response = await form.show(player);
+
+  if (response.isCanceled) return -1;
+
+  return {
+    response: {x: response.formValues[1], y: response.formValues[2], z: response.formValues[3]},
+    canceled: response.formValues[1] == "" || response.formValues[2] == "" || response.formValues[3] == "",
+    skipped: input.optional ? response.formValues[4] : false
+  };
+}
+
+async function menu_actions_input(player, input) {
+  const form = new ActionFormData();
+  form.title(input.title);
+  form.body(input.prompt || "");
+
+  for (const action of input.actions) {
+    form.button(action.value || action.name, action.icon || "");
+  }
+
+  if (input.optional) {
+    form.divider();
+    form.button("Skip");
+  }
+  form.divider();
+  form.button("");
+
+  const response = await form.show(player);
+  if (response.isCanceled) return -1;
+
+  return {
+    response:
+      response.selection < input.actions.length
+        ? input.actions[response.selection].value || input.actions[response.selection].id
+        : null,
+
+    skipped:
+      input.optional &&
+      response.selection === input.actions.length,
+
+    canceled:
+      response.selection ===
+      (input.optional
+        ? input.actions.length + 1
+        : input.actions.length)
+  };
+}
+
+// Maybe "menu_blocktype_input" or "menu_itemtype_input" in future
 
 /*------------------------
   Custom Command Recommendation Helpers
@@ -4209,7 +4320,7 @@ function correctCommand(inputCommand) {
 
   if (!command) return { fix_available: false, command: inputCommand };
 
-  print(`[DEBUG] Gefundenes Command: "${command.name}"`);
+  print(`[DEBUG] Gefundener Command: "${command.name}"`);
 
   // Ersetze das erste Token durch den 'korrekten' Command-Namen (wichtig!)
   parts[0] = command.name;
@@ -4222,10 +4333,15 @@ function correctCommand(inputCommand) {
   // vc_hiperlink hinzufügen, wenn vorhanden
   const result = { fix_available: fixAvailable, command: fixedCommand };
 
-  if (command.vc_hiperlink !== undefined) {
-    result.vc_hiperlink = command.vc_hiperlink;
+  result.vc_hiperlink = (player) => isVisualCommandAvailable(player, command);
+
+  result.visible = (player) => isCommandAvailable(player, `/${command.name}`);
+  if (typeof command.visible === "function") {
+    result.visible = (player) => command.visible(player);
+  } else if (typeof command.visible === "boolean") {
     result.visible = command.visible;
   }
+
 
 
   return result;
@@ -4516,12 +4632,15 @@ system.run(() => {
 });
 
 async function update_server_utc() {
-  try {
-    let response = await fetchViaInternetAPI("https://ipwho.is/?fields=ip,timezone");
-    server_ip = response.ip
-    server_utc = offsetToDecimal(response.timezone.utc)
-  } catch (e) {}
-
+  if (new Date().getTimezoneOffset() === 0) {
+    try {
+      let response = await fetchViaInternetAPI("https://ipwho.is/?fields=ip,timezone");
+      server_ip = response.ip
+      server_utc = offsetToDecimal(response.timezone.utc)
+    } catch (e) {}
+  } else {
+    server_utc = -new Date().getTimezoneOffset() / 60
+  }
   let save_data = load_save_data()
 
   if (save_data[0].utc_auto) {
@@ -4792,8 +4911,8 @@ function main_menu(player) {
     form.label("History");
 
     // Originalreferenz für spätere Index-Suche
-    const originalHistory = save_data[player_sd_index].command_history.filter(entry => !entry.hidden);
-    const length = originalHistory.length;
+    const originalHistory = save_data[player_sd_index].command_history;
+    const length = originalHistory.filter(entry => !entry.hidden).length;
 
 
     // Sortiert & kürzt auf 2 Einträge
@@ -4802,7 +4921,8 @@ function main_menu(player) {
       .slice(0, length > 3 ? 2 : 3);
 
     sortedHistory.forEach((c) => {
-      // WICHTIG: Originalindex aus unsortierter History holen
+      if (c.hidden) return;
+
       let originalIndex = originalHistory.indexOf(c);
 
       let commandText = c.command.split(" ")[0].replace(/^\//, "").toLowerCase();
@@ -4823,7 +4943,6 @@ function main_menu(player) {
         if (save_data[player_sd_index].quick_run) {
           execute_command(player, c.command);
         } else {
-          // KORREKT: den originalen History-Index weitergeben
           command_menu(player, c.command, originalIndex);
         }
       });
@@ -4839,27 +4958,20 @@ function main_menu(player) {
 
   // Recommended panel
   if (recommendVisible) {
-    form.divider();
     form.label("Recommended");
 
-    let displayCount = 3;
-    if (recommendedEntries.length >= 4) {
-      displayCount = 2;
-    }
+    const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
 
-    const entriesToShow = recommendedEntries.slice(0, displayCount);
+    recommendedEntries
+      .slice(0, displayCount)
+      .forEach(e => {
+        form.button(e.label, e.icon);
+        actions.push(e.actionFn);
+      });
 
-    for (const e of entriesToShow) {
-      e.icon ? form.button(e.label, e.icon) : form.button(e.label);
-      actions.push(e.actionFn);
-    }
-
-    // Falls wir nicht alle anzeigen → "Show more!"
     if (recommendedEntries.length > displayCount) {
       form.button("Show more!");
-      actions.push(() => {
-        visual_command_overview(player, recommendedEntries) // oder die passende Funktion
-      });
+      actions.push(() => visual_command_overview(player, recommendedEntries));
     }
   }
 
@@ -5141,7 +5253,7 @@ function command_menu(player, command, history_index) {
     form.label("Previous Result:");
     form.label(history_data.successful ? "§2Command executed successfully§r" : "§cCommand failed to execute§r");
     form.label(save_data[0].utc === undefined ? "§7§oTime: " + getRelativeTime(Math.floor(Date.now() / 1000) - history_data.unix, player) + " ago" : "§7§oDate: " + `${build_date.day}.${build_date.month}.${build_date.year}`);
-    form.toggle((version_info.release_type == 0? "Hide from history" : "Delete from history"), {tooltip: "If enabled, this command will be removed from your history after submitting the form.", defaultValue: history_data.hidden === true});
+    form.toggle((version_info.release_type == 0? "Hide from history" : "Delete from history"), {tooltip: "If enabled, this command will be removed from your history after submitting the form."});
   } else {
     form.toggle("Pin to Main Menu", {tooltip: "If enabled, this command will be added to your main menu for quick access."});
   }
@@ -5156,30 +5268,29 @@ function command_menu(player, command, history_index) {
 
 
     if (typeof(history_index) === "number" && deleteToggle) {
-      // Entferne den Eintrag aus der command_history
       save_data[player_sd_index].command_history[history_index].hidden = true;
       update_save_data(save_data);
     }
 
     if (!cmdVal || deleteToggle) {
-      return typeof(history_index) === "number" ? (save_data[player_sd_index].command_history.length > 3 ? command_history_menu(player) : main_menu(player)) : visual_command(player);
+      return typeof(history_index) === "number" ? (save_data[player_sd_index].command_history.some(entry => !entry.hidden) > 3 ? command_history_menu(player) : main_menu(player)) : visual_command(player);
     }
 
     if (typeof(history_index) !== "number" && pinToggle) {
       // Füge den Command der chain_commands Liste hinzu
 
-      chain_text_input(player, {
+      menu_text_input(player, {
         title: "New Pined Command",
         prompt: "Enter a name for your pined command:",
         placeholder: "My Pined Command",
         defaultValue: cmdVal.length > 20 ? cmdVal.slice(0, 17) + "..." : cmdVal
-      }).then((response) => {
-        if (response.canceled || response.formValues[0] === "") {
+      }).then((result) => {
+        if (result.canceled) {
           return command_menu(player, command, history_index);
         }
 
         save_data[player_sd_index].chain_commands.push({
-          name: response.formValues[0],
+          name: result.response,
           commands: [cmdVal],
           pined: true,
           state: {
@@ -5292,6 +5403,7 @@ async function execute_command(source, cmd, target = "server") {
     if (existingCommand) {
       existingCommand.successful = success;
       existingCommand.unix = Math.floor(Date.now() / 1000);
+      existingCommand.hidden = false;
     } else {
       save_data[player_sd_index].command_history.push({
         command: cmd,
@@ -5335,6 +5447,7 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
   let form = new ActionFormData();
   let actions = [];
   let suggestion = show_suggestion? correctCommand(command) : null;
+  suggestion = suggestion?.visible(player) ? suggestion : null;
 
   form.title("Command Result");
 
@@ -5357,14 +5470,16 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
     });
   }
 
-  if (suggestion && suggestion.fix_available && suggestion.vc_hiperlink !== undefined && suggestion.visible(player)) {
+  if (suggestion && suggestion.fix_available && suggestion.vc_hiperlink) {
     form.button("Visual command");
     actions.push(() => {
-      suggestion.vc_hiperlink(player);
-      return -1; // Otherwise, the menu opens twice. I don't know
+      return suggestion.vc_hiperlink(player);
     });
   }
 
+  if (suggestion) {
+    form.divider();
+  }
 
   form.button("Try again");
   actions.push(() => {
@@ -5420,28 +5535,48 @@ function visual_command(player) {
   } = generate_command_lists(player, !save_data[player_sd_index].recommendations);
 
   // --- Recommended ---
-  if (recommendedEntries.length > 0) {
+  if (recommendedEntries.length) {
     form.label("Recommended");
-    for (const e of recommendedEntries) {
-      e.icon ? form.button(e.label, e.icon) : form.button(e.label);
-      actions.push(e.actionFn);
+
+    const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
+
+    recommendedEntries
+      .slice(0, displayCount)
+      .forEach(e => {
+        form.button(e.label, e.icon);
+        actions.push(e.actionFn);
+      });
+
+    if (recommendedEntries.length > displayCount) {
+      form.button("Show more!");
+      actions.push(() => visual_command_overview(player, recommendedEntries));
     }
-    form.button("Show more!");
-    actions.push(() => visual_command_overview(player, recommendedEntries));
+
     form.divider();
   }
 
   // --- Optimized ---
-  if (optimizedEntries.length > 0) {
+  if (optimizedEntries.length) {
     form.label("Optimized");
-    for (const e of optimizedEntries) {
-      e.icon ? form.button(e.label, e.icon) : form.button(e.label);
-      actions.push(e.actionFn);
+
+    const displayCount = optimizedEntries.length >= 4 ? 2 : 3;
+
+    optimizedEntries
+      .slice(0, displayCount)
+      .forEach(e => {
+        form.button(e.label, e.icon);
+        actions.push(e.actionFn);
+      });
+
+    if (optimizedEntries.length > displayCount) {
+      form.button("Show more!");
+      actions.push(() => visual_command_overview(player, optimizedEntries));
     }
-    form.button("Show more!");
-    actions.push(() => visual_command_overview(player, optimizedEntries));
+
     form.divider();
   }
+
+
 
   // --- Show all commands ---
   if (allEntries.length > 0) {
@@ -5550,23 +5685,19 @@ async function chain_new(player) {
   const save_data = load_save_data();
   const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  const response = await chain_text_input(player, {
+  const result = await menu_text_input(player, {
     title: "New Chain",
     prompt: "Enter the name of the chain command:",
     placeholder: "My Chain Command",
     defaultValue: ""
   });
 
-  if (response.canceled) {
-    return -1;
-  }
-
-  if (response.formValues[0] === "") {
+  if (result.canceled) {
     return visual_command(player);
   }
 
   save_data[player_sd_index].chain_commands.push({
-    name: response.formValues[0],
+    name: result.response,
     state: {successful: null, message: null, unix: null},
     commands: [],
     pined: false
@@ -5683,17 +5814,17 @@ function chain_main(player, chainIndex) {
 
   form.button("Rename Chain", "textures/ui/editIcon");
   actions.push(() => {
-    chain_text_input(player, {
+    menu_text_input(player, {
       title: "Rename Chain",
       prompt: "Modify the name of the chain command:",
       placeholder: "My Chain Command",
       defaultValue: chain.name
-    }).then((response) => {
-      if (response.canceled || response.formValues[0] === "") {
+    }).then((result) => {
+      if (result.canceled) {
         return chain_edit(player, chainIndex);
       }
 
-      save_data[player_sd_index].chain_commands[chainIndex].name = response.formValues[0];
+      save_data[player_sd_index].chain_commands[chainIndex].name = result.response;
       update_save_data(save_data);
       main_menu(player, chainIndex);
     });
@@ -5780,17 +5911,17 @@ function chain_edit(player, chainIndex, setup = false) {
 
   form.button("Add Command", "textures/ui/color_plus");
   actions.push(() => {
-    chain_text_input(player, {
+    menu_text_input(player, {
       title: "Add Command",
       prompt: "Enter the command to add to the chain:",
       placeholder: "e.g. /say Hello World",
       defaultValue: ""
-    }).then((response) => {
-      if (response.canceled || response.formValues[0] === "") {
+    }).then((result) => {
+      if (result.canceled) {
         return chain_edit(player, chainIndex, setup);
       }
 
-      save_data[player_sd_index].chain_commands[chainIndex].commands.push(response.formValues[0]);
+      save_data[player_sd_index].chain_commands[chainIndex].commands.push(result.response);
       update_save_data(save_data);
       chain_edit(player, chainIndex, setup);
     });
@@ -5882,17 +6013,17 @@ function chain_edit_command(player, chainIndex, commandIndex, setup) {
 
   form.button("Edit Command", "textures/ui/editIcon");
   actions.push(() => {
-    chain_text_input(player, {
+    menu_text_input(player, {
       title: "Edit Command",
       prompt: "Modify the command:",
       placeholder: "e.g. /say Hello World",
       defaultValue: command
-    }).then((response) => {
-      if (response.canceled || response.formValues[0] === "") {
+    }).then((result) => {
+      if (result.canceled) {
         return chain_edit_command(player, chainIndex, commandIndex, setup);
       }
 
-      save_data[player_sd_index].chain_commands[chainIndex].commands[commandIndex] = response.formValues[0];
+      save_data[player_sd_index].chain_commands[chainIndex].commands[commandIndex] = result.response;
       update_save_data(save_data);
       chain_edit(player, chainIndex, setup);
     });
@@ -5968,6 +6099,222 @@ function execute_chain(player, chainIndex) {
     player.sendMessage(`${save_data[player_sd_index].chain_commands[chainIndex].name} Chain executed successfully.§r`);
   })();
 }
+
+/*------------------------
+ visual_command: generic commands
+-------------------------*/
+
+async function visual_command_generic(player, cmd) {
+  let fullCommand = "";
+  const save_data = load_save_data();
+  const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+  function appendToken(token) {
+    if (!token && token !== 0) return;
+    fullCommand += (fullCommand ? " " : "") + token;
+  }
+
+  async function processParts(parts) {
+    for (const part of parts) {
+      if (part.type === "literal") {
+        // literal: setzen oder anhängen
+        fullCommand = part.value;
+
+      } else if (part.type === "location") {
+        let result = await menu_location_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Enter Location: ` + part.name,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          const { x, y, z } = result.response;
+          appendToken(`${x} ${y} ${z}`);
+        }
+
+      } else if (part.type === "blocktype") {
+        let result = await menu_blocktype_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Enter blocktype: ` + part.name,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+
+      } else if (part.type === "bool") {
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: part.name + "?",
+          actions: [{id: "true", name: "Yes"}, {id: "false", name: "No"}],
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+
+      } else if (part.type === "weatherType") {
+        const actions = [
+          {
+            id: "clear",
+            name: "Sunny (clear)",
+            icon: "textures/ui/weather_clear"
+          },
+          {
+            id: "rain",
+            name: "Rain",
+            icon: "textures/ui/weather_rain"
+          },
+          {
+            id: "thunder",
+            name: "Thunderstorms",
+            icon: "textures/ui/weather_thunderstorm"
+          }
+        ];
+
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: "Which weather do you want?",
+          actions,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+
+          // id direkt für den Command nutzen
+          appendToken(result.response);
+          // oder z. B.: appendToken("/weather " + result.response);
+        }
+      } else if (part.type === "playerselector") {
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Select a player: ` + part.name,
+          actions: world.getAllPlayers().map(p => ({
+            value: p.name,
+            icon: "textures/ui/lan_icon"
+          })),
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+      } else if (part.type === "entityType") {
+        const actions = EntityTypes.getAll()
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map(e => {
+            const id = e.id.replace(/^minecraft:/, ""); // ohne namespace
+
+            // Blockliste prüfen — überspringen, falls geblockt
+            if (entity_blocklist.find(entity => entity.id == id)) return null;
+
+            // Standard-Icon, mit Ausnahme-Liste überschreiben falls vorhanden
+            let icon = "textures/items/spawn_eggs/spawn_egg_" + id;
+            if (entity_exceptionlist[id]) {
+              icon = entity_exceptionlist[id].icon;
+            }
+
+            // Name als rawtext-Objekt wie gewünscht
+            const name = { rawtext: [{ translate: "entity." + id + ".name" }] };
+
+            return { id, name, icon };
+          })
+          .filter(Boolean); // null-Einträge entfernen
+
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `What entity do you mean for ` + part.name,
+          actions: actions,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+      } else if (part.type === "enum") {
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Select the enum: ` + part.name,
+          actions: part.value,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+
+          // Anhängen der gewählten enum-Antwort
+          appendToken(result.response);
+
+          // Falls der ausgewählte enum-Eintrag ein `next` besitzt: sofort diese parts verarbeiten.
+          // Wir versuchen das option-Objekt zu finden (structure: { value: "...", next: [...] })
+          const selectedOption = Array.isArray(part.value)
+            ? part.value.find(opt => opt.value === result.response)
+            : null;
+
+          if (selectedOption && selectedOption.next && Array.isArray(selectedOption.next) && selectedOption.next.length) {
+            // Verarbeite next-Parts rekursiv
+            const nextRes = await processParts(selectedOption.next);
+            if (nextRes && nextRes.canceled) return { canceled: true };
+            // Nach Abschluss der `next`-Parts: unmittelbar ausführen und stoppen (wie gewünscht).
+            return { executeNow: true };
+          }
+        }
+      } else {
+        let result = await menu_text_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Enter ${part.type}: ` + part.name,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+      }
+    }
+    return { ok: true };
+  }
+
+  // starte Verarbeitung der Haupt-Syntax
+  const result = await processParts(cmd.syntaxes);
+
+  if (result && result.canceled) {
+    return visual_command(player);
+  }
+
+  // Wenn processParts signalisierte, dass wir direkt ausführen sollen (executeNow),
+  // oder ganz normal das Ende erreicht wurde, führen wir das Kommando aus.
+  // (executeNow und normale Ende verhalten sich gleich: sofortige Ausführung)
+  save_data[player_sd_index].quick_run
+    ? execute_command(player, fullCommand)
+    : command_menu(player, fullCommand);
+
+}
+
 
 /*------------------------
  visual_command: Gamerule
@@ -6078,6 +6425,121 @@ function visual_command_gamerule(player) {
         }
       }
     })();
+  });
+}
+
+function visual_command_gamerule_new(player) {
+  let form = new ActionFormData();
+  let actions = [];
+
+  form.title("Visual commands - gamerule");
+  form.body("Select a gamerule to add!");
+
+  const active_gamerules = gamerules.filter(g => {
+    const current = world.gameRules[g.id];
+    return (g.type === "boolean" && current === true);
+  });
+
+  const disabled_gamerules = gamerules.filter(g => {
+    const current = world.gameRules[g.id];
+    return (g.type === "boolean" && current === false);
+  });
+
+
+  const numerical_gamerules = gamerules
+    .filter(g => g.type === "slider" || g.type === "numberText")
+    .map(g => {
+      const current = world.gameRules[g.id];
+      return {
+        ...g,
+        value: current
+      };
+    });
+
+
+
+
+  if (active_gamerules.length > 0) form.label("Active gamerules:");
+  active_gamerules.forEach((g) => {
+    let name = g.name || g.id;
+    form.button(name + "\n§aon§r", g?.texture);
+    actions.push(() => {
+      const command = `/gamerule ${g.id} false`;
+
+      const save_data = load_save_data();
+      const player_sd_index = save_data.findIndex(e => e.id === player.id);
+      if (save_data[player_sd_index].quick_run) {
+        execute_command(player, command, player)
+        visual_command_gamerule_new(player);
+      } else {
+        command_menu(player, command);
+      }
+    });
+  });
+
+  if (active_gamerules.length > 0) form.divider()
+
+  if (numerical_gamerules.length > 0) form.label("Numerical gamerules:");
+  numerical_gamerules.forEach((g) => {
+    let name = g.name || g.id;
+    form.button(name + "\n§9"+ g.value +"§r", g?.texture);
+    actions.push(async () => {
+      await menu_text_input(player, {
+        title: "Set value for " + name,
+        prompt: "Enter a new value:",
+        placeholder: "Current value: " + g.value,
+        defaultValue: String(g.value)
+      }).then((result) => {
+        if (result.canceled) {
+          return visual_command_gamerule_new(player);
+        }
+        const newValue = result.response;
+        const command = `/gamerule ${g.id} ${newValue}`;
+        const save_data = load_save_data();
+        const player_sd_index = save_data.findIndex(e => e.id === player.id);
+        if (save_data[player_sd_index].quick_run) {
+          execute_command(player, command, player)
+          visual_command_gamerule_new(player);
+        } else {
+          command_menu(player, command);
+        }
+      });
+    });
+  });
+
+  if (numerical_gamerules.length > 0) form.divider()
+
+  if (disabled_gamerules.length > 0) form.label("Disabled gamerules:");
+  disabled_gamerules.forEach((g) => {
+    let name = g.name || g.id;
+    form.button(name + "\n§coff§r", g?.texture);
+    actions.push(() => {
+      const command = `/gamerule ${g.id} true`;
+
+      const save_data = load_save_data();
+      const player_sd_index = save_data.findIndex(e => e.id === player.id);
+      if (save_data[player_sd_index].quick_run) {
+        execute_command(player, command, player)
+        visual_command_gamerule_new(player);
+      } else {
+        command_menu(player, command);
+      }
+    });
+  });
+  if (disabled_gamerules.length > 0) form.divider()
+
+  form.button("");
+  actions.push(() => {
+      return visual_command(player);
+  });
+  // Formular anzeigen
+  form.show(player).then((response) => {
+      if (response.selection == undefined) {
+          return -1;
+      }
+      if (response.selection !== undefined && actions[response.selection]) {
+          actions[response.selection]();
+      }
   });
 }
 
@@ -6409,59 +6871,6 @@ function visual_command_effect_config(player, id) {
 }
 
 /*------------------------
- visual_command: Entity
--------------------------*/
-
-function all_EntityTypes(player) {
-  let form = new ActionFormData()
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-  let actions = []
-
-  form.title("Visual commands - summon");
-  form.body("What do you want to spawn?");
-
-  EntityTypes.getAll()
-  .sort((a, b) => a.id.localeCompare(b.id))
-  .forEach(e => {
-
-    const id = e.id.replace(/^minecraft:/, "");
-
-    // Deletes all entries that are on the blocklist!
-    if (!entity_blocklist.find(entity => entity.id == id)) {
-      let icon = "textures/items/spawn_eggs/spawn_egg_" + id;
-
-      if (entity_exceptionlist[id]) {
-        icon = entity_exceptionlist[id].icon;
-      }
-
-      form.button({ rawtext: [{ translate: "entity." + id + ".name" }]}, icon);
-
-      actions.push(() => save_data[player_sd_index].quick_run
-        ? execute_command(player, "summon " + id, player)
-        : command_menu(player, "summon " + id)
-      );
-    }
-  });
-
-  form.divider()
-  form.button("");
-  actions.push(() => {
-    return visual_command(player)
-  });
-
-
-  form.show(player).then((response) => {
-    if (response.selection == undefined ) {
-      return -1
-    }
-    if (response.selection !== undefined && actions[response.selection]) {
-      actions[response.selection]();
-    }
-  });
-}
-
-/*------------------------
  visual_command: Time
 -------------------------*/
 
@@ -6590,44 +6999,6 @@ function visual_command_gamemode(player) {
 
 
 /*------------------------
- visual_command: Weather
--------------------------*/
-
-function visual_command_weather(player) {
-  const form = new ActionFormData();
-  const actions = [];
-  const saveData = load_save_data();
-  const idx = saveData.findIndex(e => e.id === player.id);
-  form.title("Visual commands - weather");
-  form.body("What will the weather be like?");
-
-  // Define all weather options in one place
-  [
-    { label: "Sunny (clear)",    icon: "textures/ui/weather_clear",        cmd: "/weather clear"   },
-    { label: "Rain",             icon: "textures/ui/weather_rain",         cmd: "/weather rain"    },
-    { label: "Thunderstorms",    icon: "textures/ui/weather_thunderstorm", cmd: "/weather thunder" }
-  ].forEach(opt => {
-    form.button(opt.label, opt.icon);
-    actions.push(() => saveData[idx].quick_run
-      ? execute_command(player, opt.cmd, player)
-      : command_menu(player, opt.cmd)
-    );
-  });
-
-  // Back button
-  form.divider()
-  form.button("");
-  actions.push(() => visual_command(player));
-
-  form.show(player).then(resp => {
-    if (resp.selection != null && actions[resp.selection]) {
-      actions[resp.selection]();
-    }
-  });
-}
-
-
-/*------------------------
  Settings
 -------------------------*/
 
@@ -6647,17 +7018,6 @@ function settings_main(player) {
       save_data[player_sd_index].quick_run = true;
     } else {
       save_data[player_sd_index].quick_run = false;
-    }
-    update_save_data(save_data);
-    settings_main(player);
-  });
-
-  form.button("Visual Commands\n" + (save_data[player_sd_index].visual_command ? "§aon" : "§coff"), "textures/ui/controller_glyph_color_switch");
-  actions.push(() => {
-    if (!save_data[player_sd_index].visual_command) {
-      save_data[player_sd_index].visual_command = true;
-    } else {
-      save_data[player_sd_index].visual_command = false;
     }
     update_save_data(save_data);
     settings_main(player);
@@ -6686,7 +7046,10 @@ function settings_main(player) {
     settings_main(player);
   });
 
-  if (save_data[player_sd_index].chain_commands.length > 0 && save_data[player_sd_index].command_history.length > 0) {
+  const hasChains = save_data[player_sd_index].chain_commands.length > 0;
+  const hasHistory = save_data[player_sd_index].command_history.some(entry => !entry.hidden);
+
+  if (hasChains && hasHistory) {
     form.button("Preference\n§9" + (save_data[player_sd_index].ui_preferences == "history" ? "History" : "Chain"), "textures/ui/icon_map");
     actions.push(() => {
       if (save_data[player_sd_index].ui_preferences !== "history") {
@@ -6708,20 +7071,41 @@ function settings_main(player) {
 
     // Button 3: Permission
     const players = world.getAllPlayers();
-    const ids = players.map(p => p.id);
-    const names = save_data.slice(1).sort((a, b) =>
-      ids.includes(a.id) && !ids.includes(b.id) ? -1 :
-      ids.includes(b.id) && !ids.includes(a.id) ? 1 : 0
-    ).map(e => e.name);
+    const playerMap = new Map(players.map(p => [p.id, p]));
+    const onlineIds = new Set(players.map(p => String(p.id)));
+
+    const names = save_data.slice(1).sort((a, b) => {
+      const aOnline = onlineIds.has(String(a.id));
+      const bOnline = onlineIds.has(String(b.id));
+
+      const aOp = aOnline && playerMap.get(a.id)?.playerPermissionLevel === 2;
+      const bOp = bOnline && playerMap.get(b.id)?.playerPermissionLevel === 2;
+
+      // 1️⃣ Online OP
+      if (aOnline && bOnline) {
+        if (aOp !== bOp) return aOp ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      }
+
+      // 2️⃣ Online vor Offline
+      if (aOnline !== bOnline) return aOnline ? -1 : 1;
+
+      // 3️⃣ Beide offline → zuletzt online zuerst
+      return b.last_unix - a.last_unix;
+    });
+
+
 
     if (names.length > 1) {
-      form.button("Permission\n" + (() => {
-        return names.length > 1 ? names.slice(0, -1).join(", ") + " u. " + names[names.length - 1] : names.join(", ");
-      })(), "textures/ui/op");
-      actions.push(() => {
-        settings_rights_main(player)
-      });
+      const label = names.length > 1
+        ? names.slice(0, -1).map(n => n.name).join(", ") + " & " + names[names.length - 1].name
+        : names[0]?.name || "";
+
+
+      form.button("Permission\n" + label, "textures/ui/op");
+      actions.push(() => settings_rights_main(player));
     }
+
 
 
     // Button 4: UTC
@@ -7077,7 +7461,9 @@ function settings_gestures(player) {
     if (system_privileges == 2) {
       settings_main(player);
     } else {
-      player.runCommand("scriptevent multiple_menu:open_main");
+      world.scoreboard.addObjective("mm_data");
+      world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
+      player.runCommand("scriptevent multiple_menu:data");
     }
   });
 
@@ -7803,8 +8189,9 @@ function settings_rights_main(player) {
     }
 
     // Beide offline → zuletzt online zuerst
-    return bLastSeen - aLastSeen;
+    return b.last_unix - a.last_unix;
   });
+
 
   newList.forEach(entry => {
     const isOnline = playerMap.has(entry.id);

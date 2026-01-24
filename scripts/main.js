@@ -1,33 +1,35 @@
-import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel} from "@minecraft/server";
+import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus} from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/server-ui"
 
 
 const version_info = {
   name: "Command&Achievement",
   version: "v.6.0.0",
-  build: "B035",
-  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1769103479,
+  build: "B036",
+  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1769267417,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
       "Update VC of /gamerule",
-      "Add general VC for all commands"
+      "Add general VC for all commands",
+      "Added /agent, /vc & /menu",
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
       "Added the aliases for Default to /gamemode",
-      "Added /agent",
       "The time zone can now be set from the History menu.",
       "Commands are now labeled alphabetically in the Visual Command Overview.",
       "Show more now works more reliabel.",
       "Removed the data parameter from /fill, /setblock & /testforblock commands in the database.",
       "Removed /tp & /camera in the database for now due to issues.",
       "Removed /weather & /summon as visual commands.",
-      "Removed the ablity to toggle Visual Commands off"
+      "Removed the ablity to toggle Visual Commands off",
+      "New help texts have been added.",
+      "Updated URLs"
       // Add parallel syntaxes and cain syntaxes
     ],
     // bug_fixes
@@ -2838,126 +2840,125 @@ function multiple_menu(player) {
 -------------------------*/
 
 function registerAllCommands(init) {
-  // 1) register dynamic built-in enums
+
+  /* ---------- helpers ---------- */
+
+  const failPlayerOnly = {
+    status: CustomCommandStatus.Failure,
+    message: "The Menu can only be displayed to players!"
+  };
+
+  const isPlayer = p => p && p.typeId === "minecraft:player";
+
+  function registerMenuCommand({ name, description, handler }) {
+    init.customCommandRegistry.registerCommand(
+      { name, description, permissionLevel: CommandPermissionLevel.Any, cheatsRequired: false },
+      ({ sourceEntity }) => {
+        if (!isPlayer(sourceEntity)) return failPlayerOnly;
+
+        const result = handler(sourceEntity);
+
+        // Wenn der Handler einen Status zurückgibt → weiterreichen
+        if (result) return result;
+
+        return {
+          status: CustomCommandStatus.Success,
+          message: "Opened the Menu to " + sourceEntity.name
+        };
+      }
+    );
+  }
+
+
+  function resolveAlias(alias) {
+    for (const cmd of command_list) {
+      if (!cmd.aliases?.includes(alias)) continue;
+      const lit = cmd.syntaxes?.find(s => s.type === "literal")?.value;
+      if (lit) return lit.replace(/^\//, "");
+    }
+    return alias;
+  }
+
+  function formatArg(v) {
+    if (v == null) return String(v);
+    if (["string", "number", "boolean"].includes(typeof v)) return String(v);
+    if (Array.isArray(v)) return v.map(formatArg).join(" ");
+
+    if (typeof v === "object") {
+      const { x, y, z, X, Y, Z, id } = v;
+      if (x ?? X ?? y ?? Y ?? z ?? Z)
+        return [x ?? X, y ?? Y, z ?? Z].filter(Boolean).join(" ");
+
+      if (id && Number(id)) {
+        const p = world.getAllPlayers().find(e => e.id === id);
+        if (p) return p.name;
+        const e = world.getEntity(id);
+        if (e) return `@e[x=${e.location.x},y=${e.location.y},z=${e.location.z},r=20,type=!player,c=1]`;
+        return String(id);
+      }
+    }
+    return String(v);
+  }
+
+  /* ---------- built-in commands ---------- */
+
+  registerMenuCommand({
+    name: "com2hard:vc",
+    description: "Opens the Visual Command menu",
+    handler: p => {
+      const e = load_save_data().find(d => d.id === p.id);
+      if (p.playerPermissionLevel !== 2 && !e?.allowed_commands.length) return {
+          status: CustomCommandStatus.Failure,
+          message: "There are no commands available to run"
+        };
+      visual_command(p);
+    }
+  });
+
+  registerMenuCommand({
+    name: "com2hard:menu",
+    description: "Opens the Main menu",
+    handler: main_menu
+  });
+
+  /* ---------- dynamic commands ---------- */
+
   const enumsDynamic = registerBuiltInDynamicEnums(init);
 
-  // 2) iterate through command_list
   for (const cmd of command_list) {
-    if (cmd.cc_hidden) {
-      continue;
-    }
+    if (cmd.cc_hidden) continue;
 
-
-    // aliases array (fallback: use cmd.name)
-    const aliases = Array.isArray(cmd.aliases) && cmd.aliases.length ? cmd.aliases : [cmd.name];
-
-    // build parameter lists from top-level syntaxes (siehe Hinweis oben)
+    const aliases = cmd.aliases?.length ? cmd.aliases : [cmd.name];
     const { mandatory, optional } = buildParamsFromTopLevel(init, cmd, enumsDynamic);
+    if (!mandatory?.length && !optional?.length) continue;
 
-    // Wenn nach dem Filtern *keine* Parameter übrig sind -> Command ausblenden
-    if ((!mandatory || mandatory.length === 0) && (!optional || optional.length === 0)) {
-      continue;
-    }
-
-    // For each alias we register a separate custom command named com2hard:<alias>
     for (const alias of aliases) {
-      const regName = `com2hard:${alias}`;
-
-      const commandDescriptor = {
-        name: regName,
-        description: cmd.description || "",
-        permissionLevel: CommandPermissionLevel.Any,
-        cheatsRequired: false,
-        mandatoryParameters: mandatory,
-        optionalParameters: optional
-      };
-
       try {
-        init.customCommandRegistry.registerCommand(commandDescriptor, (origin, ...args) => {
-          system.run(() => {
+        init.customCommandRegistry.registerCommand(
+          {
+            name: `com2hard:${alias}`,
+            description: cmd.description ?? "",
+            permissionLevel: CommandPermissionLevel.Any,
+            cheatsRequired: false,
+            mandatoryParameters: mandatory,
+            optionalParameters: optional
+          },
+          (origin, ...args) => system.run(() => {
             const player = origin.sourceEntity;
+            if (!isPlayer(player)) return;
 
-            function resolveAliasToLiteral(alias, command_list) {
-              for (const cmd of command_list) {
-                if (!Array.isArray(cmd.aliases)) continue;
-
-                if (cmd.aliases.includes(alias)) {
-                  const literalSyntax = cmd.syntaxes?.find(s => s.type === "literal");
-                  if (!literalSyntax?.value) break;
-
-                  // "/" entfernen, damit später kein "//" entsteht
-                  return literalSyntax.value.startsWith("/")
-                    ? literalSyntax.value.slice(1)
-                    : literalSyntax.value;
-                }
-              }
-
-              // Fallback: Alias unverändert lassen
-              return alias;
-            }
-
-            function formatArg(v) {
-              print("Format Arg:" + v);
-              if (v === null) return "null";
-              if (v === undefined) return "undefined";
-
-              const t = typeof v;
-              if (t === "string" || t === "number" || t === "boolean") return String(v);
-
-              if (Array.isArray(v)) return v.map(formatArg).join(" ");
-
-              if (t === "object") {
-                const x = v.x ?? v.X;
-                const y = v.y ?? v.Y;
-                const z = v.z ?? v.Z;
-                if (x !== undefined || y !== undefined || z !== undefined) {
-                  return [x, y, z].filter(v => v !== undefined).map(String).join(" ");
-                }
-
-                if (v.hasOwnProperty("id")) {
-
-                  if (Number(v.id)) {
-                      const player = world.getAllPlayers().find(entity => entity.id === v.id);
-                      if (player) return String(player.name);
-
-                      // Entitys
-                      const entity = world.getEntity(v.id);
-                      if (entity) {
-                          return `@e[x=${entity.location.x}, y=${entity.location.y}, z=${entity.location.z}, r=20, type=!player, c=1]`;
-                      }
-                  }
-
-
-                  // Fallback falls nichts gefunden wird
-                  return String(v.id);
-                }
-              }
-
-              return String(v);
-            }
-
-            if (!player || player.typeId !== "minecraft:player") return {
-                status: CustomCommandStatus.Failure,
-                message: "Only players can use this command"
-            };
-
-            // Alias auflösen
-            const resolvedAlias = resolveAliasToLiteral(alias, command_list);
-
-            // kompletten Command bauen
-            const argString = args.map(formatArg).join(" ").trim();
-            const fullCommand = `/${resolvedAlias}${argString ? " " + argString : ""}`;
-
-            execute_command(player, fullCommand, player);
-          });
-        });
-
+            const base = resolveAlias(alias);
+            const argStr = args.map(formatArg).join(" ").trim();
+            execute_command(player, `/${base}${argStr && " " + argStr}`, player);
+          })
+        );
       } catch (e) {
-        system.run(() => print(`Konnte Befehl ${regName} nicht registrieren:`, e));
+        system.run(() => print(`Konnte Befehl com2hard:${alias} nicht registrieren:`, e));
       }
     }
   }
 }
+
 
 system.beforeEvents.startup.subscribe((init) => {
   registerAllCommands(init);
@@ -3295,7 +3296,12 @@ function create_player_save_data(playerId, playerName) {
   }
 
   update_save_data(save_data);
-  print(`Save data for player ${playerName} updated.`);
+  world.getAllPlayers().forEach(player => {
+    if (player.permissionLevel == 2) {
+      player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
+      player.playSound("random.pop")
+    }
+  })
 }
 
 world.afterEvents.playerJoin.subscribe(({ playerId, playerName }) => {
@@ -3310,20 +3316,19 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
 
   await system.waitTicks(40); // Wait for the player to be fully joined
 
-  if (version_info.release_type !== 2 && player.playerPermissionLevel === 2) {
-    player.sendMessage("§l§7[§f" + ("System") + "§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
-    player.playSound("random.pop")
-  }
-
-  // Help reminder: how to open the menu
+  // Help reminders
   if (save_data[player_sd_index].last_unix == undefined || save_data[player_sd_index].last_unix > (Math.floor(Date.now() / 1000) + 604800)) {
-    if (player.playerPermissionLevel === 2) {
-      player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the sneak-jump (or in spectator with the nod) gesture or with a stick")
-      player.playSound("random.pop")
-    }
+    player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the sneak-jump (or in spectator with the nod) gesture or with a stick")
+    player.playSound("random.pop")
+
     if (save_data[player_sd_index].last_unix == undefined) {
       save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000)
       update_save_data(save_data)
+    }
+  } else {
+    if (version_info.release_type !== 2 && player.playerPermissionLevel === 2) {
+      player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
+      player.playSound("random.pop")
     }
   }
 });
@@ -4643,13 +4648,8 @@ async function update_server_utc() {
   }
   let save_data = load_save_data()
 
-  if (save_data[0].utc_auto) {
-    if (server_utc) {
-      save_data[0].utc = server_utc
-    } else if (!save_data[0].utc) {
-      save_data[0].utc_auto = false
-    }
-
+  if (save_data[0].utc_auto && server_utc) {
+    save_data[0].utc = server_utc
     update_save_data(save_data)
   }
 }
@@ -4824,11 +4824,14 @@ function main_menu(player) {
     Main panel
   -------------------------*/
 
-  form.button("Run a command", "textures/ui/color_plus");
-  actions.push(() => {
-    visual_command(player);
-  });
-
+  if (player.playerPermissionLevel !== 2 && save_data[player_sd_index].allowed_commands.length == 0) {
+    form.label("§7There are no commands you are allowed to run! Ask your Admin.")
+  } else {
+    form.button("Run a command", "textures/ui/color_plus");
+    actions.push(() => {
+      visual_command(player);
+    });
+  }
 
   if (hasChains && (recommendVisible || (save_data[player_sd_index].ui_preferences == "history" && hasHistory))) {
     form.button("Chain Commands", "textures/items/chain");
@@ -4958,6 +4961,7 @@ function main_menu(player) {
 
   // Recommended panel
   if (recommendVisible) {
+    form.divider();
     form.label("Recommended");
 
     const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
@@ -5338,6 +5342,7 @@ async function execute_command(source, cmd, target = "server") {
       command: cmd,
       successful: false,
       unix: Math.floor(Date.now() / 1000),
+      count: 1,
       hidden: false
     });
     update_save_data(save_data);
@@ -5369,13 +5374,13 @@ async function execute_command(source, cmd, target = "server") {
         matchedBlock.rating === 1
           ? `The §l/${matchedBlock.command_prefix}§r command behaves §ldifferently than expected§r.\n\nDo you want to run it anyways?`
           : matchedBlock.rating === 2
-            ? `The /${matchedBlock.command_prefix}§r command will most likely §4§lmodify your world in an unrecoverable way!§r\n\nDo you really want that?`
+            ? `The /${matchedBlock.command_prefix}§r command will most likely §4§lmodify your world in an unrecoverable way!§r\n§lMAKE SURE YOU HAVE A COPY OF THE WORLD!§r\n\nDo you really want that?`
             : ""
       );
 
       if (matchedBlock.rating > 0) {
         form.button1(matchedBlock.rating === 2 ? "No risk no fun!" : "Try it!");
-        actions.push(() => resolve(true));  // Spieler bestätigt
+        actions.push(() => resolve(true));
       }
 
       form.button2("");
@@ -5404,11 +5409,13 @@ async function execute_command(source, cmd, target = "server") {
       existingCommand.successful = success;
       existingCommand.unix = Math.floor(Date.now() / 1000);
       existingCommand.hidden = false;
+      existingCommand.count++;
     } else {
       save_data[player_sd_index].command_history.push({
         command: cmd,
         successful: success,
         unix: Math.floor(Date.now() / 1000),
+        count: 1,
         hidden: false
       });
     }
@@ -7437,7 +7444,7 @@ function settings_gestures(player) {
     let alwaysActive = false;
 
     // Wenn diese Geste aktiv ist und in einem Modus die einzige aktive Geste ist → restricted
-    const restricted = isOn && configured_gestures[gesture].some(mode => modeCounts[mode] === 1);
+    const restricted = false //isOn && configured_gestures[gesture].some(mode => modeCounts[mode] === 1);
     if (restricted) {
       label = `${capitalize(gesture)}\n§orestricted`;
       icon = "textures/ui/hammer_l_disabled";

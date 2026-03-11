@@ -4,46 +4,27 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.6.0.0",
-  build: "B036",
+  version: "v.6.0.1",
+  build: "B037",
   release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1769267417,
+  unix: 1773224409,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Update VC of /gamerule",
-      "Add general VC for all commands",
-      "Added /agent, /vc & /menu",
+      "Added the \"/agent remove\" command",
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
-      "Added the aliases for Default to /gamemode",
-      "The time zone can now be set from the History menu.",
-      "Commands are now labeled alphabetically in the Visual Command Overview.",
-      "Show more now works more reliabel.",
-      "Removed the data parameter from /fill, /setblock & /testforblock commands in the database.",
-      "Removed /tp & /camera in the database for now due to issues.",
-      "Removed /weather & /summon as visual commands.",
-      "Removed the ablity to toggle Visual Commands off",
-      "New help texts have been added.",
-      "Updated URLs"
+      "/menu now opens the multiple menu if present",
       // Add parallel syntaxes and cain syntaxes
     ],
     // bug_fixes
     bug_fixes: [
-      "Device time zone detection improved",
-      "Main menu preference button will now show corectly.",
-      "Recommended Commands will now stack corectly",
-      "Fixed & Readded aliases: gm & experience",
-      "Fixed a bug where in some cases, the Visual Command of effect could not be opened.",
-      "Resolved a bug causing hidden Visual Commands to show up as suggestions after an invalid comment input.",
-      "Fixed a bug crash when the save data exceeded a certain size.",
-      "The sorting algorithm for the Permission menu has been improved.",
-      "Fixed /event in the database",
-      "Fixed the go back button in gestures while multiple menus (host) was initiated.",
+      "Agent can now be damaged and therefore killed which may result in some unexpected behavior but it's crucial for removing it.",
+      "Fixed a bug where the /vs & /menu command wouldn't work"
     ]
 
   }
@@ -341,7 +322,7 @@ const timezone_list = [
 
 const entity_blocklist = [
   {
-    id: "agent"
+    id: "agent" // Not working properly since it is invisible for the Script Engine & Commands
   },
   {
     id: "area_effect_cloud" // WTF
@@ -559,7 +540,9 @@ const command_list = [
           {
             value: "create"
           },
-
+          {
+            value: "remove"
+          },
           {
             value: "move",
             next: [
@@ -2678,7 +2661,8 @@ let block_command_list = [
   {command_prefix: "gamemode", rating: 1, relevent: (world) => world.isHardcore},
   {command_prefix: "gamemode spectator", rating: 2, relevent: (world) => world.isHardcore},
   {command_prefix: "kill", rating: 2, relevent: (world) => world.isHardcore},
-  {command_prefix: "agent create", rating: 2, relevent: (world) => true},
+  {command_prefix: "agent create", rating: 1, relevent: (world) => true},
+  {command_prefix: "agent remove", rating: 1, relevent: (world) => true}
 ]
 
 /*------------------------
@@ -2911,14 +2895,16 @@ function registerAllCommands(init) {
           status: CustomCommandStatus.Failure,
           message: "There are no commands available to run"
         };
-      visual_command(p);
+        system.run(() =>visual_command(p));
     }
   });
 
   registerMenuCommand({
     name: "com2hard:menu",
     description: "Opens the Main menu",
-    handler: main_menu
+    handler: p => {
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : main_menu(p));
+    }
   });
 
   /* ---------- dynamic commands ---------- */
@@ -4637,19 +4623,23 @@ system.run(() => {
 });
 
 async function update_server_utc() {
-  if (new Date().getTimezoneOffset() === 0) {
+  if (new Date().getTimezoneOffset() !== 0) {
+    server_utc = -new Date().getTimezoneOffset() / 60
+  } else {
     try {
       let response = await fetchViaInternetAPI("https://ipwho.is/?fields=ip,timezone");
       server_ip = response.ip
       server_utc = offsetToDecimal(response.timezone.utc)
     } catch (e) {}
-  } else {
-    server_utc = -new Date().getTimezoneOffset() / 60
   }
+
   let save_data = load_save_data()
 
   if (save_data[0].utc_auto && server_utc) {
     save_data[0].utc = server_utc
+    update_save_data(save_data)
+  } else {
+    save_data[0].utc_auto = false
     update_save_data(save_data)
   }
 }
@@ -5372,7 +5362,7 @@ async function execute_command(source, cmd, target = "server") {
       form.title("Warning");
       form.body(
         matchedBlock.rating === 1
-          ? `The §l/${matchedBlock.command_prefix}§r command behaves §ldifferently than expected§r.\n\nDo you want to run it anyways?`
+          ? `The §l/${matchedBlock.command_prefix}§r command may result in some §lunexpected§r behavior.\n\nDo you want to run it anyways?`
           : matchedBlock.rating === 2
             ? `The /${matchedBlock.command_prefix}§r command will most likely §4§lmodify your world in an unrecoverable way!§r\n§lMAKE SURE YOU HAVE A COPY OF THE WORLD!§r\n\nDo you really want that?`
             : ""
@@ -5395,11 +5385,13 @@ async function execute_command(source, cmd, target = "server") {
     if (!can_run) return command_menu(source, cmd);
   }
 
+  // agent remove command
+  let real_cmd = cmd.replace(/agent remove/i, "agent tp ~ -100 ~");
 
   try {
     let result = target === "server"
-      ? world.getDimension("overworld").runCommand(cmd)
-      : target.runCommand(cmd);
+      ? world.getDimension("overworld").runCommand(real_cmd)
+      : target.runCommand(real_cmd);
 
     const success = result.successCount > 0;
 

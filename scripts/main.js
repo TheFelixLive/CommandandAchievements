@@ -4,27 +4,25 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.6.0.1",
-  build: "B037",
-  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1773224409,
+  version: "v.7.0.0",
+  build: "B038",
+  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1774471693,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Added the \"/agent remove\" command",
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
-      "/menu now opens the multiple menu if present",
       // Add parallel syntaxes and cain syntaxes
+      "Rebranded Gesture settings to Shortcuts"
     ],
     // bug_fixes
     bug_fixes: [
-      "Agent can now be damaged and therefore killed which may result in some unexpected behavior but it's crucial for removing it.",
-      "Fixed a bug where the /vs & /menu command wouldn't work"
+      "Fixed /structure command not working properly due to a wrong syntax structure"
     ]
 
   }
@@ -33,9 +31,22 @@ const version_info = {
 console.log("Hello from " + version_info.name + " - "+version_info.version+" ("+version_info.build+") - Further debugging is "+ (version_info.release_type == 0? "enabled" : "disabled" ) + " by the version")
 
 /*------------------------
-  Internal lists
+  Development world settings --- will removed in final release, ignore for now
 -------------------------*/
 
+system.run(() => {
+  if (version_info.release_type != 0) return; // Only run in development version
+
+  world.getDimension("overworld").runCommand("gamerule showCoordinates true");
+  world.getDimension("overworld").runCommand("gamemode creative @a");
+  world.getDimension("overworld").runCommand("gamerule doDayLightCycle false");
+  world.getDimension("overworld").runCommand("gamerule doWeatherCycle false");
+  world.getDimension("overworld").runCommand("difficulty peaceful");
+});
+
+/*------------------------
+  Internal lists
+-------------------------*/
 
 const links = [
   {name: "§l§5Github:§r", link: "github.com/TheFelixLive/Command2Hardcore"},
@@ -2028,20 +2039,24 @@ const command_list = [
               { type: "location", name: "pos1" },
               { type: "location", name: "pos2" },
               {
+                type: "bool",
+                name: "includeEntities",
+                optional: true
+              },
+              {
                 type: "enum",
-                name: "mode",
+                name: "saveMode",
                 optional: true,
                 value: [
-                  { value: "replace" },
-                  { value: "keep" },
-                  { value: "merge" }
+                  { value: "disk" },
+                  { value: "memory" }
                 ]
               },
               {
                 type: "bool",
-                name: "includeEntities",
+                name: "includeBlocks",
                 optional: true
-              }
+              },
             ]
           },
 
@@ -2052,28 +2067,13 @@ const command_list = [
               { type: "location", name: "destination" },
               {
                 type: "enum",
-                name: "mode",
-                optional: true,
-                value: [
-                  { value: "replace" },
-                  { value: "ignore" },
-                  { value: "masked" }
-                ]
-              },
-              {
-                type: "bool",
-                name: "includeEntities",
-                optional: true
-              },
-              {
-                type: "enum",
                 name: "rotation",
                 optional: true,
                 value: [
-                  { value: "0" },
-                  { value: "90" },
-                  { value: "180" },
-                  { value: "270" }
+                  { value: "0_degrees" },
+                  { value: "90_degrees" },
+                  { value: "180_degrees" },
+                  { value: "270_degrees" }
                 ]
               },
               {
@@ -2082,10 +2082,42 @@ const command_list = [
                 optional: true,
                 value: [
                   { value: "none" },
-                  { value: "left_right" },
-                  { value: "front_back" }
+                  { value: "x" },
+                  { value: "xz" },
+                  { value: "z" }
                 ]
-              }
+              },
+              // Note: "animation" mode for load is not supported just yet, because it requires related or repeated syntaxs!
+              {
+                type: "bool",
+                name: "includeEntities",
+                optional: true
+              },
+              {
+                type: "bool",
+                name: "includeBlocks",
+                optional: true
+              },
+              {
+                type: "bool",
+                name: "waterlogged",
+                optional: true
+              },
+              {
+                type: "bool",
+                name: "waterlogged",
+                optional: true
+              },
+              {
+                type: "float",
+                name: "integrity",
+                optional: true
+              },
+              {
+                type: "string",
+                name: "seed",
+                optional: true
+              },
             ]
           },
 
@@ -2093,26 +2125,6 @@ const command_list = [
             value: "delete",
             next: [
               { type: "string", name: "structureName" }
-            ]
-          },
-
-          {
-            value: "list"
-          },
-
-          {
-            value: "export",
-            next: [
-              { type: "string", name: "structureName" },
-              { type: "string", name: "fileName", optional: true }
-            ]
-          },
-
-          {
-            value: "import",
-            next: [
-              { type: "string", name: "fileName" },
-              { type: "string", name: "structureName", optional: true }
             ]
           }
         ]
@@ -2799,14 +2811,6 @@ function multiple_menu(player) {
     });
   });
 
-  form.divider()
-  form.label("Settings")
-
-  form.button("Gestures", "textures/ui/sidebar_icons/emotes");
-  actions.push(() => {
-    settings_gestures(player)
-  });
-
   form.show(player).then((response) => {
     if (response.selection == undefined ) {
       return -1
@@ -2906,6 +2910,17 @@ function registerAllCommands(init) {
       system.run(() => system_privileges == 1 ? multiple_menu(p) : main_menu(p));
     }
   });
+
+  if (version_info.release_type == 0) {
+    registerMenuCommand({
+      name: "com2hard:gmc",
+      description: "Gamemode Creative (for testing purposes)",
+      handler: p => {
+        system.run(() => p.setGameMode("Creative"));
+      }
+    });
+  }
+
 
   /* ---------- dynamic commands ---------- */
 
@@ -3217,8 +3232,6 @@ function delete_player_save_data(player) {
   update_save_data(save_data);
 }
 
-
-
 // Add player if not present
 function create_player_save_data(playerId, playerName) {
   let save_data = load_save_data();
@@ -3228,7 +3241,7 @@ function create_player_save_data(playerId, playerName) {
       id: playerId,
       name: playerName,
       last_unix: Math.floor(Date.now() / 1000),
-      gesture: { emote: false, sneak: true, nod: true, stick: true },
+      gesture: { emote: false, sneak: false, nod: false, stick: false },
       command_history: [],
       quick_run: false,
       recommendations: true,
@@ -3304,7 +3317,7 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
 
   // Help reminders
   if (save_data[player_sd_index].last_unix == undefined || save_data[player_sd_index].last_unix > (Math.floor(Date.now() / 1000) + 604800)) {
-    player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the sneak-jump (or in spectator with the nod) gesture or with a stick")
+    player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the command §l/com2hard:menu§r§f.")
     player.playSound("random.pop")
 
     if (save_data[player_sd_index].last_unix == undefined) {
@@ -3320,7 +3333,7 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
 });
 
 /*------------------------
- Open the menu
+ Menu shortcuts
 -------------------------*/
 
 // via. item
@@ -3372,9 +3385,6 @@ async function gesture_jump() {
     }
   }
 }
-
-
-
 
 // via. emote gesture
 const gestureCooldowns_emote = new Map();
@@ -7008,32 +7018,15 @@ function settings_main(player) {
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
   form.title("Settings");
-  form.body("Your self");
+  form.body("Main Menu");
 
-  // Quick run
-  form.button("Quick run\n" + (save_data[player_sd_index].quick_run ? "§aon" : "§coff"), (save_data[player_sd_index].quick_run ? "textures/ui/sprint_pressed" : "textures/ui/sprint"));
+  // Shortcuts
+  form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
   actions.push(() => {
-    if (!save_data[player_sd_index].quick_run) {
-      save_data[player_sd_index].quick_run = true;
-    } else {
-      save_data[player_sd_index].quick_run = false;
-    }
-    update_save_data(save_data);
-    settings_main(player);
+    settings_shortcuts(player)
   });
 
-  // Gestures
-  if (system_privileges == 2) {
-    form.button("Gestures", "textures/ui/sidebar_icons/emotes");
-    actions.push(() => {
-      settings_gestures(player)
-    });
-  }
-
-  form.divider()
-
-  form.label("Main Menu");
-
+  // Recommendations
   form.button("Recommendations\n" + (save_data[player_sd_index].recommendations ? "§aon" : "§coff"), "textures/ui/realms_particles");
   actions.push(() => {
     if (!save_data[player_sd_index].recommendations) {
@@ -7048,6 +7041,7 @@ function settings_main(player) {
   const hasChains = save_data[player_sd_index].chain_commands.length > 0;
   const hasHistory = save_data[player_sd_index].command_history.some(entry => !entry.hidden);
 
+  // UI Preferences (nur anzeigen, wenn auch tatsächlich Daten vorhanden sind)
   if (hasChains && hasHistory) {
     form.button("Preference\n§9" + (save_data[player_sd_index].ui_preferences == "history" ? "History" : "Chain"), "textures/ui/icon_map");
     actions.push(() => {
@@ -7064,7 +7058,7 @@ function settings_main(player) {
 
   form.divider()
 
-  // BPermission
+  // Permission
   if (player.playerPermissionLevel === 2) {
     form.label("Multiplayer");
 
@@ -7101,7 +7095,7 @@ function settings_main(player) {
         : names[0]?.name || "";
 
 
-      form.button("Permission\n" + label, "textures/ui/op");
+      form.button("Permission\n§9" + label, "textures/ui/op");
       actions.push(() => settings_rights_main(player));
     }
 
@@ -7392,78 +7386,51 @@ function settings_time_zone_preview (player, zone, switch_to_auto, viewing_mode)
  Gestures
 -------------------------*/
 
-function settings_gestures(player) {
+function settings_shortcuts(player) {
   const form = new ActionFormData();
   const save_data = load_save_data();
-  const idx = save_data.findIndex(e => e.id === player.id);
-  const playerGestures = save_data[idx].gesture;
+  const player_sd_index = save_data.findIndex(e => e.id === player.id);
+  const shortcuts = save_data[player_sd_index].gesture;
   let actions = [];
 
-  const configured_gestures = {
-    emote:    ["su","a","c"],
-    sneak:    ["su","a","c"],
-    nod:      ["sp"],
-    stick:    ["su","a","c"]
-  };
 
-  form.title("Gestures");
-  form.body("Choose your own configuration of how the menu should open!");
+  form.title("Shortcuts");
+  form.body("Commands")
 
-  const available = Object.keys(configured_gestures);
-
-  // Hilfsfunktion für Großschreibung
-  function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
-
-  // Zähle für jeden Modus (su, a, c, sp) wie viele Gesten aktiv sind
-  const modeCounts = {
-    su: 0, a: 0, c: 0, sp: 0
-  };
-
-  available.forEach(gesture => {
-    if (playerGestures[gesture]) {
-      configured_gestures[gesture].forEach(mode => {
-        modeCounts[mode]++;
-      });
+  // Quick run
+  form.button("Quick run\n" + (save_data[player_sd_index].quick_run ? "§aon" : "§coff"), (save_data[player_sd_index].quick_run ? "textures/ui/sprint_pressed" : "textures/ui/sprint"));
+  actions.push(() => {
+    if (!save_data[player_sd_index].quick_run) {
+      save_data[player_sd_index].quick_run = true;
+    } else {
+      save_data[player_sd_index].quick_run = false;
     }
+    update_save_data(save_data);
+    settings_shortcuts(player);
   });
+  form.divider()
 
-  available.forEach(gesture => {
-    const isOn = playerGestures[gesture];
-    let label = `${capitalize(gesture)}\n${isOn ? "§aon" : "§coff"}`;
-    let icon = isOn ? "textures/ui/toggle_on" : "textures/ui/toggle_off";
-    let alwaysActive = false;
+  // Menu Shortcuts
+  form.label("Menu opening shortcuts")
 
-    // Wenn diese Geste aktiv ist und in einem Modus die einzige aktive Geste ist → restricted
-    const restricted = false //isOn && configured_gestures[gesture].some(mode => modeCounts[mode] === 1);
-    if (restricted) {
-      label = `${capitalize(gesture)}\n§orestricted`;
-      icon = "textures/ui/hammer_l_disabled";
-      alwaysActive = true;
-    }
-
-    form.button(label, icon);
-
-    actions.push(() => {
-      if (!alwaysActive) {
-        playerGestures[gesture] = !playerGestures[gesture];
+  if (system_privileges == 0) {
+    form.label("§7Menu shortcuts are courently unavailable.");
+  } else {
+    Object.keys(shortcuts).forEach(command => {
+      const isOn = shortcuts[command];
+      form.button(command + "\n" + (isOn ? "§aon" : "§coff"), isOn ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
+      actions.push(() => {
+        shortcuts[command] = !shortcuts[command];
         update_save_data(save_data);
-      }
-      settings_gestures(player);
+        settings_shortcuts(player);
+      });
     });
-  });
+  }
 
   form.divider()
   form.button("");
   actions.push(() => {
-    if (system_privileges == 2) {
-      settings_main(player);
-    } else {
-      world.scoreboard.addObjective("mm_data");
-      world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
-      player.runCommand("scriptevent multiple_menu:data");
-    }
+    settings_main(player);
   });
 
   form.show(player).then(response => {
@@ -7474,6 +7441,7 @@ function settings_gestures(player) {
     if (typeof actions[sel] === "function") actions[sel]();
   });
 }
+
 
 /*------------------------
  Dictionary

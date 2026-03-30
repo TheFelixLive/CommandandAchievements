@@ -5,24 +5,28 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B038",
+  build: "B039",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1774471693,
+  unix: 1774900913,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
+      "Chains can now be executed with custom commands"
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
-      // Add parallel syntaxes and cain syntaxes
+      // Add parallel syntaxes
       "Rebranded Gesture settings to Shortcuts"
     ],
     // bug_fixes
     bug_fixes: [
-      "Fixed /structure command not working properly due to a wrong syntax structure"
+      "Fixed /structure command not working properly due to a wrong syntax structure",
+      "Fixed weather visual command not working properly due to a wrong parameter type",
+      "Fixed the visual enchant command, which wouldn't close the menu properly with quick run enabled",
+      "Custom commands executed by other entities contains a failed message"
     ]
 
   }
@@ -1087,7 +1091,7 @@ const command_list = [
     description: "Set or query the weather",
     syntaxes: [
       { type: "literal", value: "/weather" },
-      { type: "weathertype", name: "type", optional: true },
+      { type: "weatherType", name: "type"},
       { type: "int", name: "duration", optional: true }
     ]
   },
@@ -2888,11 +2892,13 @@ function registerAllCommands(init) {
     return String(v);
   }
 
-  /* ---------- built-in commands ---------- */
+  /* ---------- menu commands ---------- */
 
   registerMenuCommand({
     name: "com2hard:vc",
     description: "Opens the Visual Command menu",
+    permissionLevel: CommandPermissionLevel.Any,
+    cheatsRequired: false,
     handler: p => {
       const e = load_save_data().find(d => d.id === p.id);
       if (p.playerPermissionLevel !== 2 && !e?.allowed_commands.length) return {
@@ -2906,20 +2912,47 @@ function registerAllCommands(init) {
   registerMenuCommand({
     name: "com2hard:menu",
     description: "Opens the Main menu",
+    permissionLevel: CommandPermissionLevel.Any,
+    cheatsRequired: false,
     handler: p => {
       system.run(() => system_privileges == 1 ? multiple_menu(p) : main_menu(p));
     }
   });
 
-  if (version_info.release_type == 0) {
-    registerMenuCommand({
-      name: "com2hard:gmc",
-      description: "Gamemode Creative (for testing purposes)",
-      handler: p => {
-        system.run(() => p.setGameMode("Creative"));
+  /* ---------- built-in commands ---------- */
+
+  init.customCommandRegistry.registerCommand({
+      name: "com2hard:chain",
+      description: "Executes a specified command chain",
+      permissionLevel: CommandPermissionLevel.Any,
+      cheatsRequired: false,
+      optionalParameters: [
+        { type: CustomCommandParamType.Integer, name: "chainIndex" }
+      ],
+    }, (origin, chainIndex) => {
+      const player = origin.sourceEntity;
+      if (!isPlayer(player)) return {
+        status: CustomCommandStatus.Failure,
+        message: "The command source must be a player to execute a command chain"
+      };
+
+      const save_data = load_save_data();
+      const playerData = save_data.find(d => d.id === player.id);
+      const chains = Array.isArray(playerData?.chain_commands) ? playerData.chain_commands : [];
+
+      if (chainIndex === undefined) {
+        return {
+          status: CustomCommandStatus.Failure,
+          message: "Please provide a valid chain index." +
+            (chains.length > 0 ? " Possible ids:\n" +
+                chains.map((c, idx) => `${idx} for ${c.name ?? "<unnamed>"}`).join("\n") : "")
+        };
       }
-    });
-  }
+
+      system.run(() => {
+        execute_chain(player, chainIndex);
+      });
+  });
 
 
   /* ---------- dynamic commands ---------- */
@@ -2944,14 +2977,20 @@ function registerAllCommands(init) {
             mandatoryParameters: mandatory,
             optionalParameters: optional
           },
-          (origin, ...args) => system.run(() => {
-            const player = origin.sourceEntity;
-            if (!isPlayer(player)) return;
+          (origin, ...args) =>
+            {
+              const player = origin.sourceEntity;
+              if (!isPlayer(player)) return {
+                status: CustomCommandStatus.Failure,
+                message: "Coundn't verify premissions because the command source is not a player"
+              };
 
-            const base = resolveAlias(alias);
-            const argStr = args.map(formatArg).join(" ").trim();
-            execute_command(player, `/${base}${argStr && " " + argStr}`, player);
-          })
+              system.run(() => {
+                const base = resolveAlias(alias);
+                const argStr = args.map(formatArg).join(" ").trim();
+                execute_command(player, `/${base}${argStr && " " + argStr}`, player);
+              })
+        }
         );
       } catch (e) {
         system.run(() => print(`Konnte Befehl com2hard:${alias} nicht registrieren:`, e));
@@ -3246,7 +3285,6 @@ function create_player_save_data(playerId, playerName) {
       quick_run: false,
       recommendations: true,
       chain_commands: [],
-      ui_preferences: "chain",
       allowed_commands: [],
   });
 
@@ -4816,7 +4854,7 @@ function main_menu(player) {
   const { recommendedEntries } = generate_command_lists(player);
 
   const recommendVisible = (recommendedEntries.length > 0 && save_data[player_sd_index].recommendations);
-  const hasChains = save_data[player_sd_index].chain_commands.length > 0;
+  const pinedChains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).length > 0;
   const hasHistory = save_data[player_sd_index].command_history.some(entry => !entry.hidden);
 
 
@@ -4831,19 +4869,10 @@ function main_menu(player) {
     actions.push(() => {
       visual_command(player);
     });
-  }
 
-  if (hasChains && (recommendVisible || (save_data[player_sd_index].ui_preferences == "history" && hasHistory))) {
     form.button("Chain Commands", "textures/items/chain");
     actions.push(() => {
       chain_overview(player);
-    });
-  }
-
-  if (hasHistory && (recommendVisible || (save_data[player_sd_index].ui_preferences == "chain" && hasChains))) {
-    form.button("History", "textures/ui/icon_book_writable");
-    actions.push(() => {
-      command_history_menu(player);
     });
   }
 
@@ -4853,14 +4882,12 @@ function main_menu(player) {
 
 
   // Chain Commands panel
-  if (!recommendVisible && hasChains && (save_data[player_sd_index].ui_preferences == "chain" || save_data[player_sd_index].command_history.length == 0)) {
+  if (!recommendVisible && pinedChains) {
     form.divider();
-    form.label("Chain Commands");
+    form.label("Pined Chains");
 
     // Sortierte Kopie: pined zuerst, dann alphabetisch nach name
-    let sorted_chains = save_data[player_sd_index].chain_commands.slice().sort((a, b) => {
-      if (a.pined && !b.pined) return -1;
-      if (!a.pined && b.pined) return 1;
+    let sorted_chains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).slice().sort((a, b) => {
       let nameA = (a.name || "").toLowerCase();
       let nameB = (b.name || "").toLowerCase();
       if (nameA < nameB) return -1;
@@ -4868,15 +4895,7 @@ function main_menu(player) {
       return 0;
     });
 
-    // Anzeige-Anzahl: bis 3, aber sobald ein 4. existiert, nur noch 2 anzeigen
-    let displayCount;
-    if (sorted_chains.length <= 3) {
-      displayCount = Math.min(3, sorted_chains.length);
-    } else {
-      displayCount = 2;
-    }
-
-    for (let i = 0; i < displayCount; i++) {
+    for (let i = 0; i < sorted_chains.length; i++) {
       let chain = sorted_chains[i];
 
       const cmdName = chain.name || "Unnamed Chain";
@@ -4890,26 +4909,14 @@ function main_menu(player) {
         return () => {
           // Originalindex in der unveränderten Liste ermitteln
           let originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === ch);
-          if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
-            execute_chain(player, originalIndex);
-          } else {
-            chain_main(player, originalIndex);
-          }
+          execute_chain(player, originalIndex);
         };
       })(chain));
-    }
-
-    // Wenn es mehr Einträge gibt als wir anzeigen, "Show more!" anbieten
-    if (sorted_chains.length > displayCount) {
-      form.button("Show more!");
-      actions.push(() => {
-        chain_overview(player);
-      });
     }
   }
 
   // History panel
-  if (!recommendVisible && hasHistory && (save_data[player_sd_index].ui_preferences == "history" || save_data[player_sd_index].chain_commands.length == 0)) {
+  if (!recommendVisible && hasHistory && !pinedChains) {
     form.divider();
     form.label("History");
 
@@ -5302,7 +5309,6 @@ function command_menu(player, command, history_index) {
             unix: null
           }
         });
-        save_data[player_sd_index].ui_preferences = "chain";
         update_save_data(save_data);
         main_menu(player);
         return;
@@ -5329,7 +5335,7 @@ function command_menu(player, command, history_index) {
 
 
 /*------------------------
- execute Command
+ execute a Command
 -------------------------*/
 
 async function execute_command(source, cmd, target = "server") {
@@ -5530,9 +5536,6 @@ function visual_command(player) {
   form.button("Typing", "textures/ui/chat_send");
   actions.push(() => { command_menu(player); });
 
-  form.button("Create a chain", "textures/items/chain");
-  actions.push(() => { chain_new(player); });
-
   form.divider();
 
   // --- Listen durch Helper erzeugen ---
@@ -5702,7 +5705,7 @@ async function chain_new(player) {
   });
 
   if (result.canceled) {
-    return visual_command(player);
+    return chain_overview(player);
   }
 
   save_data[player_sd_index].chain_commands.push({
@@ -5726,12 +5729,17 @@ function chain_overview(player) {
 
   let chain_commands = save_data[player_sd_index].chain_commands;
 
+  form.button("New chain", "textures/ui/color_plus");
+  actions.push(() => { chain_new(player); });
+  form.divider();
+
   // Zwei Listen: pined und unpined
   let pinedChains = chain_commands.filter(c => c.pined).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   let unpinedChains = chain_commands.filter(c => !c.pined).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-
-  pinedChains.forEach(chain => {
+  if (pinedChains.length > 0) {
+    form.label("Pinned Chains")
+    pinedChains.forEach(chain => {
     const cmdName = chain.name || "Unnamed Chain";
     const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
     const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
@@ -5739,28 +5747,6 @@ function chain_overview(player) {
     form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
     actions.push(() => {
       let originalIndex = chain_commands.findIndex(c => c === chain);
-      if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
-        execute_chain(player, originalIndex);
-      } else {
-        chain_main(player, originalIndex);
-      }
-    });
-  });
-
-  if (pinedChains.length > 0 && unpinedChains.length > 0) {
-    form.divider();
-  }
-
-  unpinedChains.forEach(chain => {
-    const cmdName = chain.name || "Unnamed Chain";
-    const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-    const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
-
-    form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
-
-    actions.push(() => {
-      let originalIndex = chain_commands.findIndex(c => c === chain);
-
       if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
         execute_chain(player, originalIndex);
       } else {
@@ -5770,6 +5756,33 @@ function chain_overview(player) {
   });
 
   form.divider();
+  }
+
+
+  if (unpinedChains.length > 0) {
+    form.label("All Chains");
+
+    unpinedChains.forEach(chain => {
+      const cmdName = chain.name || "Unnamed Chain";
+      const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
+      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+
+      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
+
+      actions.push(() => {
+        let originalIndex = chain_commands.findIndex(c => c === chain);
+
+        if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
+          execute_chain(player, originalIndex);
+        } else {
+          chain_main(player, originalIndex);
+        }
+      });
+    });
+
+    form.divider();
+  }
+
 
   form.button("");
   actions.push(() => {
@@ -5793,6 +5806,7 @@ function chain_main(player, chainIndex) {
   form.body("Chain Command Overview");
   form.divider();
   form.label(`Commands in this chain: ${chain.commands.length}`);
+  form.label(`Chain ID: ${chainIndex}`);
   form.label(`Last run: §7${chain.state.unix ? getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix) + " ago" : "Never"}§r`);
   if (chain.state.successful !== null) {
     form.label(`Last result: ${chain.state.successful ? "§2Successful§r" : "§cFailed§r"}`);
@@ -5862,7 +5876,7 @@ function chain_main(player, chainIndex) {
 
   form.button("");
   actions.push(() => {
-    main_menu(player);
+    chain_overview(player);
   });
 
   form.show(player).then((response) => {
@@ -6329,114 +6343,6 @@ async function visual_command_generic(player, cmd) {
  visual_command: Gamerule
 -------------------------*/
 
-function visual_command_gamerule_quick_run(player) {
-  let form = new MessageFormData();
-  let actions = [];
-  let save_data = load_save_data()
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  form.title("Quick run?");
-  form.body("You must enable Quick run to continue!");
-
-  form.button1("§aEnable")
-  form.button2("");
-
-  // Formular anzeigen
-  form.show(player).then((response) => {
-      if (response.selection == undefined) {
-          return -1;
-      }
-      if (response.selection == 0) {
-        save_data[player_sd_index].quick_run = true
-        update_save_data(save_data)
-        visual_command_gamerule(player)
-      } else {
-        visual_command(player)
-      }
-  });
-}
-
-function visual_command_gamerule(player) {
-  let form = new ModalFormData();
-  let actions = [];
-
-  form.title("Visual commands - gamerule");
-
-  const controls = [];
-
-  // Add controls to form
-  gamerules.forEach((g) => {
-    const current = world.gameRules[g.key];
-
-    if (g.type === "boolean") {
-      form.toggle(g.key, { defaultValue: !!current, tooltip: g.tooltip });
-      controls.push({ key: g.key, type: "boolean" });
-    } else if (g.type === "slider") {
-      const def = typeof current === "number" ? current : g.min;
-      form.slider(g.key, g.min, g.max, { defaultValue: Number(def), tooltip: g.tooltip, valueStep: g.step ?? 1 });
-      controls.push({ key: g.key, type: "number", input: "slider" });
-    } else if (g.type === "numberText") {
-      const defStr = (typeof current !== "undefined" && current !== null) ? String(current) : "";
-      form.textField(g.key, "Enter a number", { defaultValue: defStr, tooltip: g.tooltip });
-      controls.push({ key: g.key, type: "number", input: "text" });
-    }
-  });
-
-  // Show form & apply changes
-  form.show(player).then((response) => {
-    if (response.canceled) {
-      return;
-    }
-
-    const values = response.formValues;
-    const changedRules = [];
-
-    for (let i = 0; i < controls.length; i++) {
-      const c = controls[i];
-      const oldValue = world.gameRules[c.key];
-      let newValue = values[i];
-
-      if (c.type === "boolean") {
-        newValue = Boolean(newValue);
-        if (oldValue !== newValue) {
-          changedRules.push({ key: c.key, value: newValue.toString() });
-        }
-      } else if (c.type === "number") {
-        if (c.input === "slider") {
-          newValue = Number(newValue);
-          if (oldValue !== newValue) {
-            changedRules.push({ key: c.key, value: newValue.toString() });
-          }
-        } else {
-          const parsed = parseInt(String(newValue), 10);
-          if (!Number.isNaN(parsed) && oldValue !== parsed) {
-            changedRules.push({ key: c.key, value: parsed.toString() });
-          } else if (Number.isNaN(parsed)) {
-            player.sendMessage(`§cInvalid value for ${c.key}: ${newValue} (skipped)`);
-          }
-        }
-      }
-    }
-
-    if (changedRules.length === 0) {
-      return;
-    }
-
-    // Run commands sequentially for each changed gamerule:
-    // command syntax: gamerule <name> <value>
-    (async () => {
-      for (const rule of changedRules) {
-        const cmd = `gamerule ${rule.key} ${rule.value}`;
-        try {
-          execute_command(player, cmd, player)
-        } catch (e) {
-          player.sendMessage(`§cFailed to set ${rule.key}: ${e.message ?? e}`);
-        }
-      }
-    })();
-  });
-}
-
 function visual_command_gamerule_new(player) {
   let form = new ActionFormData();
   let actions = [];
@@ -6563,6 +6469,8 @@ function visual_command_enchant(player) {
   form.title("Visual commands - enchant");
   form.body("Select a vailed Item!");
 
+
+
   world.getAllPlayers().forEach(p => {
       const item = p.getComponent("minecraft:inventory")?.container?.getItem(p.selectedSlotIndex);
       if (!item) return;
@@ -6623,7 +6531,15 @@ function visual_command_enchant_type(viewing_player, selected_player, item) {
         const command = `/enchant "${selected_player.name}" ${e.id} ` + (e.maxLevel > 1 ? e.maxLevel : "");
 
         if (save_data[player_sd_index].quick_run) {
-          (execute_command(viewing_player, command, viewing_player) && getCompatibleEnchantmentTypes(item).length > 0)? visual_command_enchant_type(viewing_player, selected_player, selected_player.getComponent("minecraft:inventory")?.container?.getItem(selected_player.selectedSlotIndex)) : undefined
+          execute_command(viewing_player, command, viewing_player)
+
+          if (compatibleEnchants.length > 1) {
+            visual_command_enchant_type(viewing_player, selected_player, selected_player.getComponent("minecraft:inventory")?.container?.getItem(selected_player.selectedSlotIndex))
+          } else {
+            // Exit
+            visual_command_enchant(viewing_player);
+          }
+
 
         } else {
           command_menu(viewing_player, command);
@@ -7037,24 +6953,6 @@ function settings_main(player) {
     update_save_data(save_data);
     settings_main(player);
   });
-
-  const hasChains = save_data[player_sd_index].chain_commands.length > 0;
-  const hasHistory = save_data[player_sd_index].command_history.some(entry => !entry.hidden);
-
-  // UI Preferences (nur anzeigen, wenn auch tatsächlich Daten vorhanden sind)
-  if (hasChains && hasHistory) {
-    form.button("Preference\n§9" + (save_data[player_sd_index].ui_preferences == "history" ? "History" : "Chain"), "textures/ui/icon_map");
-    actions.push(() => {
-      if (save_data[player_sd_index].ui_preferences !== "history") {
-        save_data[player_sd_index].ui_preferences = "history";
-      } else {
-        save_data[player_sd_index].ui_preferences = "chain";
-      }
-      update_save_data(save_data);
-      settings_main(player);
-    });
-  }
-
 
   form.divider()
 

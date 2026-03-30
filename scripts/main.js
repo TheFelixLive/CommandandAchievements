@@ -5,14 +5,15 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B039",
+  build: "B040",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1774900913,
+  unix: 1774905683,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Chains can now be executed with custom commands"
+      "Chains can now be executed with custom commands",
+      "Added support for icons in chain commands",
       // New about page
       // Readd /tp, /camera & /execute command
     ],
@@ -4902,7 +4903,7 @@ function main_menu(player) {
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
       const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
 
-      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
+      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
       // Closure damit jeder Button das richtige chain referenziert
       actions.push(((ch) => {
@@ -4995,6 +4996,12 @@ function main_menu(player) {
   form.divider()
   form.label("Other");
 
+  if (hasHistory && (recommendVisible || pinedChains)) {
+    form.button("History", "textures/ui/icon_book_writable");
+    actions.push(() => {
+      command_history_menu(player);
+    });
+  }
 
   // Button: Settings
   form.button("Settings", "textures/ui/debug_glyph_color");
@@ -5711,6 +5718,7 @@ async function chain_new(player) {
   save_data[player_sd_index].chain_commands.push({
     name: result.response,
     state: {successful: null, message: null, unix: null},
+    icon: undefined,
     commands: [],
     pined: false
   });
@@ -5744,7 +5752,7 @@ function chain_overview(player) {
     const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
     const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
 
-    form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
+    form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
     actions.push(() => {
       let originalIndex = chain_commands.findIndex(c => c === chain);
       if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
@@ -5767,7 +5775,7 @@ function chain_overview(player) {
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
       const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
 
-      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`);
+      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
       actions.push(() => {
         let originalIndex = chain_commands.findIndex(c => c === chain);
@@ -5844,12 +5852,45 @@ function chain_main(player, chainIndex) {
       defaultValue: chain.name
     }).then((result) => {
       if (result.canceled) {
-        return chain_edit(player, chainIndex);
+        return chain_main(player, chainIndex);
       }
 
       save_data[player_sd_index].chain_commands[chainIndex].name = result.response;
       update_save_data(save_data);
-      main_menu(player, chainIndex);
+      chain_main(player, chainIndex);
+    });
+  });
+
+  form.button(chain.icon ? "Change Icon" : "Add Icon", chain.icon || "textures/ui/mashup_PaintBrush");
+  actions.push(() => {
+    menu_text_input(player, {
+      title: chain.icon ? "Change Icon" : "Add Icon",
+      prompt: "Enter the texture path for the chain icon:",
+      placeholder: "textures/ui/chain_icon",
+      defaultValue: chain.icon || "textures/ui/",
+      tooltip: "You can use any valid Minecraft texture path. For example:\n\n- textures/ui/icon_trailer\n- textures/items/ender_eye\n\nYou can find a list at github.com/Mojang/bedrock-samples/tree/main/resource_pack"
+    }).then((result) => {
+      if (result.canceled && chain.icon) {
+        form = new MessageFormData();
+        form.title("Delete Icon");
+        form.body("Are you sure you want to delete the custom icon for this chain command?");
+        form.button1("Yes, delete it");
+        form.button2("");
+
+        form.show(player).then((response) => {
+          if (response.selection === 0) {
+            save_data[player_sd_index].chain_commands[chainIndex].icon = undefined;
+            update_save_data(save_data);
+          }
+
+          chain_main(player, chainIndex);
+        });
+        return;
+      }
+
+      save_data[player_sd_index].chain_commands[chainIndex].icon = result.response;
+      update_save_data(save_data);
+      chain_main(player, chainIndex);
     });
   });
 
@@ -5865,7 +5906,7 @@ function chain_main(player, chainIndex) {
       if (confirmResponse.selection === 0) {
         save_data[player_sd_index].chain_commands.splice(chainIndex, 1);
         update_save_data(save_data);
-        main_menu(player);
+        chain_overview(player);
       } else {
         chain_main(player, chainIndex);
       }
@@ -6108,7 +6149,7 @@ function execute_chain(player, chainIndex) {
           unix : Math.floor(Date.now() / 1000)
         };
         update_save_data(save_data);
-        player.sendMessage(`§cChain execution stopped due to error.§r`);
+        player.sendMessage(`§cChain execution stopped due to error on ${cmd}. Open the chain editor to view the error!§r`);
         return;
       }
     }

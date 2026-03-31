@@ -5,22 +5,27 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B040",
+  build: "B041",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1774905683,
+  unix: 1774986606,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
       "Chains can now be executed with custom commands",
       "Added support for icons in chain commands",
+      "Added location insertion for visual command menu",
+      "Added Categories for commands",
+      "Restructured the main menu layout"
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
       // Add parallel syntaxes
-      "Rebranded Gesture settings to Shortcuts"
+      "Rebranded Gesture settings to Shortcuts",
+      "Improved the logic for command syntax fixing.",
+      "Chains now appear in the history list.",
     ],
     // bug_fixes
     bug_fixes: [
@@ -538,6 +543,34 @@ const gamerules = [
   { id: "tntExplosionDropDecay", type: "boolean", tooltip: "Explosions reduce the amount of dropped items.", name: "Reduces items dropped by explosions", default: true }
 ];
 
+const command_categories = [
+  {
+    name: "Agent Commands",
+    description: "Control and manage your Agent",
+    icon: "textures/items/spawn_eggs/spawn_egg_agent"
+  },
+  {
+    name: "World Commands",
+    description: "Modify the world",
+    icon: "textures/ui/worldsIcon"
+  },
+  {
+    name: "Entity Commands",
+    description: "Manage entities",
+    icon: "textures/ui/promo_creeper"
+  },
+  {
+    name: "Player Commands",
+    description: "Manage players",
+    icon: "textures/ui/warning_alex"
+  },
+  {
+    name: "Game Commands",
+    description: "Manage game settings and rules",
+    icon: "textures/ui/controller_glyph_color_switch"
+  }
+]
+
 const command_list = [
   // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, enum, (gameruletype)
 
@@ -546,6 +579,7 @@ const command_list = [
     aliases: ["agent"],
     description: "Control and manage your Agent",
     textures: "textures/items/spawn_eggs/spawn_egg_agent",
+    category: 0,
     syntaxes: [
       { type: "literal", value: "/agent" },
 
@@ -706,6 +740,7 @@ const command_list = [
     aliases: ["fill"],
     textures: "textures/items/wood_axe",
     description: "Fill area with blocks",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/fill" },
       { type: "location", name: "from" },
@@ -742,6 +777,7 @@ const command_list = [
       else visual_command_effect_add(player);
     },
     vc_available: (player) => true,
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/effect" },
       { type: "entityselector", name: "target" },
@@ -758,6 +794,7 @@ const command_list = [
     aliases: ["give"],
     description: "Gives an item to a player",
     textures: "textures/items/diamond_sword",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/give" },
       { type: "playerselector", name: "target" },
@@ -773,6 +810,7 @@ const command_list = [
     aliases: ["summon"],
     description: "Summons an entity",
     textures: "textures/items/spawn_eggs/spawn_egg_creeper",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/summon" },
       { type: "entityType", name: "entityType" },
@@ -788,6 +826,7 @@ const command_list = [
     aliases: ["teleport", "tp"],
     description: "Teleport entity or player",
     textures: "textures/ui/dressing_room_skins",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/teleport" },
       {
@@ -828,6 +867,7 @@ const command_list = [
     aliases: ["camera"],
     textures: "textures/ui/camera-yo",
     description: "Control camera",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/camera" },
       { type: "playerselector", name: "targets" },
@@ -1057,6 +1097,7 @@ const command_list = [
     aliases: ["playsound"],
     textures: "textures/ui/sound_glyph_color_2x",
     description: "Play a sound",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/playsound" },
       { type: "string", name: "sound" },
@@ -1071,6 +1112,7 @@ const command_list = [
     name: "setblock",
     aliases: ["setblock"],
     description: "Set block at coordinates",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/setblock" },
       { type: "location", name: "pos" },
@@ -1090,6 +1132,7 @@ const command_list = [
     textures: "textures/ui/cloud_only_storage",
     recommended: (player) => false, //world.getDimension("overworld").getWeather() !== WeatherType.Clear,
     description: "Set or query the weather",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/weather" },
       { type: "weatherType", name: "type"},
@@ -1103,6 +1146,7 @@ const command_list = [
     textures: "textures/ui/icons/icon_staffpicks",
     cc_hidden: true,
     description: "Show help for commands or a specific command",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/help" },
       { type: "string", name: "command", optional: true }
@@ -1114,6 +1158,7 @@ const command_list = [
     aliases: ["daylock", "alwaysday"],
     txtures: "textures/ui/lock_color",
     description: "Lock/unlock the time of day",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/daylock" },
       { type: "bool", name: "enabled"}
@@ -1126,6 +1171,7 @@ const command_list = [
     aliases: ["clear"],
     textures: "textures/ui/icon_none",
     description: "Clear items from a player's inventory",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/clear" },
       { type: "playerselector", name: "player", optional: true },
@@ -1139,6 +1185,7 @@ const command_list = [
     textures: "textures/ui/icon_trash",
     aliases: ["clearspawnpoint"],
     description: "Clear world spawnpoint or player's spawn",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/clearspawnpoint" },
       { type: "playerselector", name: "player", optional: true }
@@ -1150,6 +1197,7 @@ const command_list = [
     aliases: ["clone"],
     textures: "textures/ui/icon_recipe_item",
     description: "Clone blocks from one region to another",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/clone" },
       { type: "location", name: "begin" },
@@ -1174,6 +1222,7 @@ const command_list = [
     aliases: ["damage"],
     textures: "textures/ui/heart_half",
     description: "Damage an entity",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/damage" },
       { type: "entityselector", name: "target" },
@@ -1188,6 +1237,7 @@ const command_list = [
     aliases: ["dialogue"],
     textures: "textures/ui/icon_book_writable",
     description: "Show an NPC dialogue to player",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/dialogue" },
       { type: "playerselector", name: "player" },
@@ -1200,6 +1250,7 @@ const command_list = [
     aliases: ["difficulty"],
     textures: "textures/ui/hardcore/freeze_heart",
     description: "Set or query difficulty",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/difficulty" },
       {
@@ -1228,6 +1279,7 @@ const command_list = [
       return !!firstWithEnchantable && firstWithEnchantable.name === player.name;
     },
     description: "Apply an enchantment to an item",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/enchant" },
       { type: "playerselector", name: "player" },
@@ -1241,6 +1293,7 @@ const command_list = [
     textures: "textures/ui/raid_omen_effect",
     aliases: ["event"],
     description: "Trigger a game event",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/event" },
       {
@@ -1264,6 +1317,7 @@ const command_list = [
     aliases: ["xp", "experience"],
     textures: "textures/items/experience_bottle",
     description: "Grant experience points",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/xp" },
       { type: "int", name: "amount" },
@@ -1276,6 +1330,7 @@ const command_list = [
     aliases: ["fog"],
     textures: "textures/ui/bottle_empty_pocket",
     description: "Control fog",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/fog" },
 
@@ -1412,6 +1467,7 @@ const command_list = [
     aliases: ["function"],
     description: "Run a function",
     textures: "textures/ui/copy",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/function" },
       { type: "string", name: "name" }
@@ -1430,6 +1486,7 @@ const command_list = [
       const gm = player.getGameMode();
       return gm !== "Survival" && gm !== "Creative";
     },
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/gamemode" },
       {
@@ -1452,6 +1509,7 @@ const command_list = [
        visual_command_gamerule(player) : visual_command_gamerule_quick_run(player),
     vc_available: (player) => version_info.release_type < 2,
     description: "Set or query a gamerule",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/gamerule" },
       { type: "string", name: "rule" },
@@ -1469,6 +1527,7 @@ const command_list = [
     recommended: (player) => world.gameRules.randomTickSpeed > 100,
     vc_available: (player) => true,
     description: "Set a gamerule",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/gamerule" },
       { type: "gameruletype", name: "rule" },
@@ -1482,6 +1541,7 @@ const command_list = [
     aliases: ["hud"],
     textures: "textures/ui/hunger_full",
     description: "Control HUD elements",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/hud" },
       { type: "playerselector", name: "target" },
@@ -1523,6 +1583,7 @@ const command_list = [
     textures: "textures/ui/controller_glyph_color_switch",
     description: "Grant or revoke input permissions",
     recommended: (player) => [...Array(13).keys()].some(x => !player.inputPermissions.isPermissionCategoryEnabled(x)),
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/inputpermission" },
       {
@@ -1565,6 +1626,7 @@ const command_list = [
     textures: "textures/ui/profile_glyph_color",
     cc_hidden: true,
     description: "Kick a player from the server",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/kick" },
       { type: "playerselector", name: "player" },
@@ -1577,6 +1639,7 @@ const command_list = [
     aliases: ["kill"],
     textures: "textures/ui/heart_background",
     description: "Kill entities",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/kill" },
       { type: "entityselector", name: "target", optional: true }
@@ -1588,6 +1651,7 @@ const command_list = [
     aliases: ["music"],
     textures: "textures/ui/sound_glyph_color_2x",
     description: "Play / queue / stop music tracks",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/music" },
 
@@ -1654,6 +1718,7 @@ const command_list = [
     aliases: ["particle"],
     textures: "textures/ui/realms_particles",
     description: "Spawn particles",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/particle" },
       { type: "string", name: "particleName" },
@@ -1667,6 +1732,7 @@ const command_list = [
     aliases: ["playanimation"],
     textures: "textures/ui/icons/icon_trailer",
     description: "Play an animation on an entity",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/playanimation" },
       { type: "entityselector", name: "target" },
@@ -1679,6 +1745,7 @@ const command_list = [
     aliases: ["recipe"],
     textures: "textures/ui/icon_book_writable",
     description: "Grant or revoke recipes",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/recipe" },
       { type: "playerselector", name: "player" },
@@ -1731,6 +1798,7 @@ const command_list = [
     aliases: ["replaceitem"],
     textures: "textures/ui/icon_new_item",
     description: "Replaces items in inventories or block containers",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/replaceitem" },
       {
@@ -1771,6 +1839,7 @@ const command_list = [
     recommended: (player) => isRideableEntityNearby(player, 5),
     textures: "textures/items/saddle",
     description: "Manage entity riding",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/ride" },
       { type: "entityselector", name: "rider" },
@@ -1834,6 +1903,7 @@ const command_list = [
     aliases: ["schedule"],
     textures: "textures/items/clock_item",
     description: "Schedule a function or command",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/schedule" },
 
@@ -1882,6 +1952,7 @@ const command_list = [
     aliases: ["scoreboard"],
     textures: "textures/ui/dressing_room_skins",
     description: "Manage objectives and players",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/scoreboard" },
 
@@ -1982,6 +2053,7 @@ const command_list = [
     aliases: ["setworldspawn"],
     textures: "textures/items/compass_item",
     description: "Set the world spawn position",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/setworldspawn" },
       { type: "location", name: "pos", optional: true }
@@ -1993,6 +2065,7 @@ const command_list = [
     aliases: ["spawnpoint"],
     textures: "textures/items/recovery_compass_item",
     description: "Set a player's spawnpoint",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/spawnpoint" },
       { type: "playerselector", name: "player", optional: true },
@@ -2005,6 +2078,7 @@ const command_list = [
     aliases: ["spreadplayers"],
     description: "Spread entities around a point",
     textures: "textures/items/ender_pearl",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/spreadplayers" },
       { type: "location", name: "center" },
@@ -2018,6 +2092,7 @@ const command_list = [
     name: "stopsound",
     aliases: ["stopsound"],
     description: "Stop sounds for players",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/stopsound" },
       { type: "playerselector", name: "targets" },
@@ -2030,6 +2105,7 @@ const command_list = [
     aliases: ["structure"],
     description: "Save, load, or manage structures",
     textures: "textures/ui/structure_block",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/structure" },
 
@@ -2143,6 +2219,7 @@ const command_list = [
     aliases: ["tag"],
     description: "Add/remove/list tags on entities",
     textures: "textures/items/name_tag",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/tag" },
       {
@@ -2180,6 +2257,7 @@ const command_list = [
     textures: "textures/ui/achievements_pause_menu_icon",
     cc_hidden: true,
     description: "Send JSON-formatted chat messages",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/tellraw" },
       { type: "playerselector", name: "target" },
@@ -2192,6 +2270,7 @@ const command_list = [
     aliases: ["testfor"],
     textures: "textures/ui/magnifyingGlass",
     description: "Test for entities matching criteria",
+    category: 2,
     syntaxes: [
       { type: "literal", value: "/testfor" },
       { type: "entityselector", name: "target" }
@@ -2203,6 +2282,7 @@ const command_list = [
     aliases: ["testforblock"],
     textures: "textures/ui/magnifyingGlass",
     description: "Test a single block for a type/state",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/testforblock" },
       { type: "location", name: "pos" },
@@ -2215,6 +2295,7 @@ const command_list = [
     aliases: ["testforblocks"],
     textures: "textures/ui/magnifyingGlass",
     description: "Test that two regions contain identical blocks",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/testforblocks" },
       { type: "location", name: "begin" },
@@ -2244,6 +2325,7 @@ const command_list = [
     aliases: ["tickingarea"],
     textures: "textures/items/redstone_dust",
     description: "Manage ticking areas",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/tickingarea" },
 
@@ -2299,6 +2381,7 @@ const command_list = [
     vc_hiperlink: (player) => visual_command_time(player),
     vc_available: (player) => true,
     recommended: (player) => !(world.getTimeOfDay() < 12000),
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/time" },
       {
@@ -2353,6 +2436,7 @@ const command_list = [
     aliases: ["title"],
     textures: "textures/ui/comment",
     description: "Display titles to players",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/title" },
       { type: "playerselector", name: "player" },
@@ -2398,6 +2482,7 @@ const command_list = [
     aliases: ["titleraw"],
     textures: "textures/ui/achievements_pause_menu_icon",
     description: "Display raw JSON titles",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/titleraw" },
       { type: "playerselector", name: "player" },
@@ -2434,6 +2519,7 @@ const command_list = [
     textures: "textures/ui/cloud_only_storage",
     aliases: ["toggledownfall"],
     description: "Toggle rain/snow",
+    category: 1,
     syntaxes: [{ type: "literal", value: "/toggledownfall" }]
   },
 
@@ -2442,6 +2528,7 @@ const command_list = [
     aliases: ["camerashake"],
     textures: "textures/ui/camera-yo",
     description: "Shake the camera for one or more players",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/camerashake" },
       {
@@ -2474,6 +2561,7 @@ const command_list = [
     textures: "textures/ui/lan_icon",
     cc_hidden: true,
     description: "List players on the server or query server info",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/list" }
     ]
@@ -2484,6 +2572,7 @@ const command_list = [
     aliases: ["loot"],
     textures: "textures/blocks/ender_chest_front",
     description: "Give or spawn loot from a loot table",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/loot" },
       {
@@ -2523,6 +2612,7 @@ const command_list = [
     aliases: ["place"],
     textures: "textures/ui/icons/icon_new",
     description: "Place an item or block at a position",
+    category: 1,
     syntaxes: [
       { type: "literal", value: "/place" },
       {
@@ -2577,6 +2667,7 @@ const command_list = [
     cc_hidden: true,
     textures: "textures/ui/achievements_pause_menu_icon",
     description: "Broadcast a chat message to all players",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/say" },
       { type: "string", name: "message" }
@@ -2588,6 +2679,7 @@ const command_list = [
     aliases: ["script"],
     textures: "textures/ui/ui_debug_glyph_color",
     description: "Debugging, profiling and diagnostics controls for the scripting system",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/script" },
 
@@ -2646,6 +2738,7 @@ const command_list = [
     name: "scriptevent",
     aliases: ["scriptevent"],
     description: "Trigger a script event",
+    category: 4,
     syntaxes: [
       { type: "literal", value: "/scriptevent" },
       { type: "string", name: "eventName" },
@@ -2660,6 +2753,7 @@ const command_list = [
     textures: "textures/ui/achievements_pause_menu_icon",
     aliases: ["tell", "msg", "w"],
     description: "Send a private message to another player (whisper)",
+    category: 3,
     syntaxes: [
       { type: "literal", value: "/tell" },
       { type: "playerselector", name: "target" },
@@ -3272,7 +3366,6 @@ function delete_player_save_data(player) {
   update_save_data(save_data);
 }
 
-// Add player if not present
 function create_player_save_data(playerId, playerName) {
   let save_data = load_save_data();
 
@@ -3342,6 +3435,10 @@ function create_player_save_data(playerId, playerName) {
   })
 }
 
+/*------------------------
+ Join Messages and reminders
+-------------------------*/
+
 world.afterEvents.playerJoin.subscribe(({ playerId, playerName }) => {
   create_player_save_data(playerId, playerName);
 })
@@ -3392,7 +3489,7 @@ world.beforeEvents.itemUse.subscribe(event => {
 
 // via. jump gesture
 const gestureCooldowns_jump = new Map();
-const gestureState_reset = new Map(); // Speichert, ob Sneak+Jump zurückgesetzt wurden
+const gestureState_reset = new Map();
 
 async function gesture_jump() {
   const now = Date.now();
@@ -3427,7 +3524,7 @@ async function gesture_jump() {
 
 // via. emote gesture
 const gestureCooldowns_emote = new Map();
-const gestureState_reset_emote = new Map(); // Speichert, ob Emote zurückgesetzt wurde
+const gestureState_reset_emote = new Map();
 
 async function gesture_emote() {
   const now = Date.now();
@@ -3739,12 +3836,14 @@ function isVisualCommandAvailable(player, cmd) {
   return (player) => cmd.vc_hiperlink(player);
 }
 
-
-function generate_command_lists(player, use_recomandations = true) {
+function generate_command_lists(player) {
   const recommendedEntries = [];
-  const optimizedEntries = [];
-  const unoptimizedEntries = [];
   const allEntries = [];
+  const categoryLists = command_categories.map((category, categoryIndex) => ({
+    categoryIndex,
+    category,
+    entries: []
+  }));
 
   let save_data = load_save_data();
   const player_sd_index = save_data.findIndex(e => e.id === player.id);
@@ -3789,39 +3888,106 @@ function generate_command_lists(player, use_recomandations = true) {
       }
     };
 
-
-
     // --- Kategorisierung ---
-    if (recommendedFlag && use_recomandations) {
-      addTo(allEntries, cmd.name, cmd.textures, actionFn);
+    if (recommendedFlag) {
       addTo(recommendedEntries, cmd.name, cmd.textures, actionFn);
-      continue;
     }
 
-    if (isVC) {
-      addTo(allEntries, cmd.name, cmd.textures, actionFn);
-      addTo(optimizedEntries, cmd.name, cmd.textures, actionFn);
-      continue;
+    const categoryIndex = Number.isInteger(cmd.category) ? cmd.category : -1;
+    if (categoryIndex >= 0 && categoryIndex < categoryLists.length) {
+      categoryLists[categoryIndex].entries.push({ label: cmd.name, icon: cmd.textures, actionFn });
     }
 
     addTo(allEntries, cmd.name, cmd.textures, actionFn);
-    addTo(unoptimizedEntries, cmd.name, cmd.textures, actionFn);
   }
 
   // Sortieren optional
   const sorter = (a, b) => a.label.localeCompare(b.label);
   recommendedEntries.sort(sorter);
-  optimizedEntries.sort(sorter);
-  unoptimizedEntries.sort(sorter);
   allEntries.sort(sorter);
+  for (const cat of categoryLists) {
+    cat.entries.sort(sorter);
+  }
 
   return {
     recommendedEntries,
-    optimizedEntries,
-    unoptimizedEntries,
-    allEntries
+    allEntries,
+    categoryLists
   };
 }
+
+function generate_history_entries(player) {
+  const saveData = load_save_data();
+  const playerIndex = saveData.findIndex(entry => entry.id === player.id);
+  const originalHistory = (playerIndex !== -1 && Array.isArray(saveData[playerIndex].command_history))
+    ? saveData[playerIndex].command_history
+    : [];
+
+  const historyEntries = [...originalHistory]
+    .filter(entry => entry.hidden !== true)
+    .map(entry => {
+      const cmdName = (entry.command || "").split(" ")[0].replace(/^\//, "").toLowerCase();
+      const statusText = entry.successful ? "§2ran§r" : "§cfailed§r";
+      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - entry.unix);
+
+      const matchingCommand = command_list.find(cmd =>
+        Array.isArray(cmd.aliases) &&
+        cmd.aliases.map(a => a.toLowerCase()).includes(cmdName)
+      );
+
+      const texture = matchingCommand?.textures ?? "textures/ui/chat_send";
+      const originalIndex = originalHistory.indexOf(entry);
+
+      return {
+        category: "command",
+        entry,
+        label: `/${cmdName}\n${statusText} | ${relativeTime} ago`,
+        icon: texture,
+        originalIndex,
+        actionFn: () => {
+          if (saveData[playerIndex].quick_run) {
+            execute_command(player, entry.command, player);
+          } else {
+            command_menu(player, entry.command, originalIndex);
+          }
+        }
+      };
+    });
+
+  const chainEntries = (playerIndex !== -1 && Array.isArray(saveData[playerIndex].chain_commands))
+    ? saveData[playerIndex].chain_commands
+        .map((chain, index) => ({ chain, index }))
+        .filter(({ chain }) => chain?.state?.unix != null)
+        .map(({ chain, index }) => {
+          const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
+          const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+
+          return {
+            category: "chain",
+            entry: { ...chain, unix: chain.state.unix },
+            label: `Chain: ${chain.name || "Unnamed Chain"}\n${statusText} | ${relativeTime} ago`,
+            icon: chain.icon || "textures/items/chain",
+            originalIndex: index,
+            actionFn: () => {
+              if (chain.commands.length !== 0 && saveData[playerIndex].quick_run) {
+                execute_chain(player, index);
+              } else {
+                chain_main(player, index);
+              }
+            }
+          };
+        })
+    : [];
+
+  const allEntrys = [...historyEntries, ...chainEntries]
+    .sort((a, b) => b.entry.unix - a.entry.unix);
+
+  return allEntrys;
+}
+
+/*------------------------
+  Visual Command Input Helpers
+-------------------------*/
 
 async function menu_text_input(player, input) {
   const form = new ModalFormData();
@@ -3881,6 +4047,8 @@ async function menu_location_input(player, input) {
     }
   );
 
+  form.toggle("Inserting a location", { tooltip: "This will temporarily close the menu so that you can look at the coresponding location." });
+
   if (input.optional) {
     form.toggle("Skip", { tooltip: "Enable to skip this input" });
   }
@@ -3889,10 +4057,33 @@ async function menu_location_input(player, input) {
 
   if (response.isCanceled) return -1;
 
+  let skipped = input.optional ? response.formValues[5] : false;
+
+  // "Insuring a Location" toggled -> close menu and return current location as response
+  if (response.formValues[4] && !skipped) {
+      let block;
+      while (!player.isSneaking) {
+        block = player.getBlockFromViewDirection().block
+
+        player.onScreenDisplay.setActionBar(block.location.x + ", " + block.location.y + ", " + block.location.z + " - sneak to confirm");
+        await system.waitTicks(1);
+      }
+
+      return {
+        response: {
+          x: Math.floor(block.location.x),
+          y: Math.floor(block.location.y),
+          z: Math.floor(block.location.z)
+        },
+        canceled: false,
+        skipped: false
+      };
+  }
+
   return {
     response: {x: response.formValues[1], y: response.formValues[2], z: response.formValues[3]},
     canceled: response.formValues[1] == "" || response.formValues[2] == "" || response.formValues[3] == "",
-    skipped: input.optional ? response.formValues[4] : false
+    skipped: skipped
   };
 }
 
@@ -4161,7 +4352,6 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
   return { mandatory, optional };
 }
 
-
 /*------------------------
  Command fixing helpers
 -------------------------*/
@@ -4199,6 +4389,64 @@ function findClosest(input, list, typeName = "") {
   }
   print(`[DEBUG] findClosest: "${input}" -> "${closest}" (Typ: ${typeName})`);
   return closest;
+}
+
+function findClosestCommandName(input, list) {
+  const closest = findClosest(input, list, "command");
+  if (!closest) return null;
+  const distance = levenshtein(input.toLowerCase(), closest.toLowerCase());
+  const maxDistance = Math.max(1, Math.floor(Math.min(input.length, closest.length) * 0.4));
+  if (distance > maxDistance) {
+    print(`[DEBUG] findClosestCommandName: "${input}" -> "${closest}" (Distanz ${distance} > ${maxDistance}), kein sicherer Treffer`);
+    return null;
+  }
+  return closest;
+}
+
+function splitCommandParts(commandString) {
+  return commandString.match(/"[^"]*"|'[^']*'|[^\s]+/g) || [];
+}
+
+function isLikelySyntaxMatch(input, typeDef, syntax) {
+  if (input == null || input === "") return false;
+  const typeName = (typeof typeDef === "string")
+    ? typeDef.toLowerCase()
+    : ((typeDef && (typeDef.name || typeDef.type)) || "").toLowerCase();
+  const value = String(input).trim();
+  if (value === "") return false;
+
+  switch (typeName) {
+    case "literal": {
+      const expected = syntax?.value || syntax?.values || syntax?.expected || [];
+      if (!Array.isArray(expected) || expected.length === 0) return false;
+      const values = expected.map(v => String(v?.value ?? v));
+      if (values.some(v => v.toLowerCase() === value.toLowerCase())) return true;
+      const closest = findClosest(value, values, "literal");
+      return levenshtein(value.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(value.length * 0.4));
+    }
+    case "enum": {
+      const values = (syntax?.value || []).map(v => String(v?.value ?? v));
+      if (values.some(v => v.toLowerCase() === value.toLowerCase())) return true;
+      if (values.length === 0) return false;
+      const closest = findClosest(value, values, "enum");
+      return levenshtein(value.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(value.length * 0.4));
+    }
+    case "playerselector":
+    case "entityselector":
+      return /^@/.test(value) || value.length > 0;
+    case "location":
+      return isValidLocation(value) || /^~/.test(value);
+    case "json":
+      return isValidJson(value) || /^[\[{]/.test(value);
+    case "int":
+      return /^-?\d+$/.test(value);
+    case "float":
+      return !Number.isNaN(parseFloat(value));
+    case "bool":
+      return /^(true|false)$/i.test(value);
+    default:
+      return true;
+  }
 }
 
 function fixSelector(input) {
@@ -4281,12 +4529,17 @@ function fixArgument(typeDef, input) {
     case "bool":     return ["true","false"].includes(input?.toLowerCase()) ? input.toLowerCase() : "false";
     case "location": return isValidLocation(input) ? input : "~ ~ ~";
 
-    case "blocktype":   return findClosest(input, extractStrings(BlockTypes.getAll()), "blocktype");
-    case "itemtype": {
-      const all = [...extractStrings(ItemTypes.getAll()), ...extractStrings(BlockTypes.getAll())];
-      return findClosest(input, [...new Set(all)], "itemtype");
+    case "blocktype": {
+      const inputValue = stripMinecraft(input);
+      return findClosest(inputValue, extractStrings(BlockTypes.getAll()).map(stripMinecraft), "blocktype") || input;
     }
-    case "entitytype":  return findClosest(input, extractStrings(EntityTypes.getAll()), "entitytype");
+    case "itemtype": {
+      const all = [...extractStrings(ItemTypes.getAll()), ...extractStrings(BlockTypes.getAll())].map(stripMinecraft);
+      return findClosest(stripMinecraft(input), [...new Set(all)], "itemtype") || input;
+    }
+    case "entitytype": {
+      return findClosest(stripMinecraft(input), extractStrings(EntityTypes.getAll()).map(stripMinecraft), "entitytype") || input;
+    }
 
     case "effecttype": {
       // Kandidaten und Input ohne "minecraft:" vergleichen => Ergebnis ohne Prefix zurückgeben
@@ -4324,6 +4577,11 @@ function fixSyntax(parts, syntaxList, index = 0) {
       continue;
     }
 
+    if (syntax.optional && !isLikelySyntaxMatch(part, syntax.type, syntax)) {
+      print(`[DEBUG] Optionaler Syntax-Teil übersprungen: ${JSON.stringify(syntax)} Teil="${part}"`);
+      continue;
+    }
+
     let fixed = fixArgument(syntax.type, part);
     if (fixed !== part) fixAvailable = true;
     fixedParts.push(fixed);
@@ -4349,23 +4607,29 @@ function correctCommand(inputCommand) {
 
   // entferne genau ein führendes "/" (falls vorhanden) bevor wir splitten
   const withoutSlash = trimmed.replace(/^\//, "");
-  const parts = withoutSlash.split(/\s+/);
+  const parts = splitCommandParts(withoutSlash);
+  if (parts.length === 0) return { fix_available: false, command: inputCommand };
 
-  const cmdLiteral = parts[0]; // jetzt ohne "/"
+  const cmdLiteral = parts[0].replace(/^minecraft:/i, ""); // jetzt ohne "/"
 
   // Command-Namen / Alias via Levenshtein
   const commandNames = command_list.map(c => c.name).concat(command_list.flatMap(c => c.aliases || []));
-  const closestCommandName = findClosest(cmdLiteral, commandNames, "command");
-  const command = command_list.find(c => c.name === closestCommandName || (c.aliases || []).includes(closestCommandName));
+  const closestCommandName = findClosestCommandName(cmdLiteral, commandNames);
+  const command = closestCommandName
+    ? command_list.find(c => c.name === closestCommandName || (c.aliases || []).includes(closestCommandName))
+    : null;
 
   if (!command) return { fix_available: false, command: inputCommand };
+
+  const commandFixAvailable = closestCommandName && closestCommandName.toLowerCase() !== cmdLiteral.toLowerCase();
 
   print(`[DEBUG] Gefundener Command: "${command.name}"`);
 
   // Ersetze das erste Token durch den 'korrekten' Command-Namen (wichtig!)
   parts[0] = command.name;
 
-  const { fixedParts, fixAvailable } = fixSyntax(parts, command.syntaxes);
+  const { fixedParts, fixAvailable: syntaxFixAvailable } = fixSyntax(parts, command.syntaxes);
+  const fixAvailable = syntaxFixAvailable || commandFixAvailable;
   const fixedCommand = (hadLeadingSlash ? "/" : "") + fixedParts.join(" ");
 
   print(`[DEBUG] Korrigierter Command: "${fixedCommand}" fix_available=${fixAvailable}`);
@@ -4836,8 +5100,6 @@ function buildEnchantmentCategories(item, compatibleEnchants) {
   return comps;
 }
 
-
-
 /*------------------------
  Menus
 -------------------------*/
@@ -4910,7 +5172,11 @@ function main_menu(player) {
         return () => {
           // Originalindex in der unveränderten Liste ermitteln
           let originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === ch);
-          execute_chain(player, originalIndex);
+          if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
+            execute_chain(player, originalIndex);
+          } else {
+            chain_main(player, originalIndex);
+          }
         };
       })(chain));
     }
@@ -4921,45 +5187,15 @@ function main_menu(player) {
     form.divider();
     form.label("History");
 
-    // Originalreferenz für spätere Index-Suche
-    const originalHistory = save_data[player_sd_index].command_history;
-    const length = originalHistory.filter(entry => !entry.hidden).length;
+    const historyButtons = generate_history_entries(player);
+    const previewHistory = historyButtons.slice(0, historyButtons.length > 3 ? 2 : 3);
 
-
-    // Sortiert & kürzt auf 2 Einträge
-    let sortedHistory = [...originalHistory]
-      .sort((a, b) => b.unix - a.unix)
-      .slice(0, length > 3 ? 2 : 3);
-
-    sortedHistory.forEach((c) => {
-      if (c.hidden) return;
-
-      let originalIndex = originalHistory.indexOf(c);
-
-      let commandText = c.command.split(" ")[0].replace(/^\//, "").toLowerCase();
-      let statusText = c.successful ? "§2ran§r" : "§cfailed§r";
-      let relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - c.unix);
-
-      // Passenden Command suchen
-      let matchingCommand = command_list.find(cmd =>
-        Array.isArray(cmd.aliases) &&
-        cmd.aliases.map(a => a.toLowerCase()).includes(commandText)
-      );
-
-      let texture = matchingCommand?.textures ?? "textures/ui/chat_send";
-
-      form.button(`/${commandText}\n${statusText} | ${relativeTime} ago`, texture);
-
-      actions.push(() => {
-        if (save_data[player_sd_index].quick_run) {
-          execute_command(player, c.command);
-        } else {
-          command_menu(player, c.command, originalIndex);
-        }
-      });
+    previewHistory.forEach((buttonEntry) => {
+      form.button(buttonEntry.label, buttonEntry.icon);
+      actions.push(buttonEntry.actionFn);
     });
 
-    if (length > 3) {
+    if (historyButtons.length > 3) {
       form.button("Show more!");
       actions.push(() => {
         command_history_menu(player);
@@ -5034,17 +5270,9 @@ function main_menu(player) {
 -------------------------*/
 
 function command_history_menu(player) {
-  let saveData = load_save_data();
-  let playerIndex = saveData.findIndex(entry => entry.id === player.id);
+  const saveData = load_save_data();
 
-  // defensiv: ensure history exists
-  const originalHistory = saveData[playerIndex].command_history
-
-  // Sortierte Kopie (originalHistory bleibt unverändert)
-  let sortedHistory = [...originalHistory]
-  .filter(entry => entry.hidden !== true)
-  .sort((a, b) => b.unix - a.unix);
-
+  const historyButtons = generate_history_entries(player);
 
   const now = Math.floor(Date.now() / 1000);
   const utcSet = Boolean(saveData[0]?.utc);
@@ -5116,26 +5344,16 @@ function command_history_menu(player) {
 
   // 1. Durchlauf: Zähle Einträge pro Gruppe (wird später pro Seite genutzt)
   const groupCounts = {};
-  sortedHistory.forEach(entry => {
-    const { group } = determineGroupLabel(entry.unix);
+  historyButtons.forEach(buttonEntry => {
+    const { group } = determineGroupLabel(buttonEntry.entry.unix);
     groupCounts[group] = (groupCounts[group] || 0) + 1;
   });
-
-  // Hilfsfunktion: finde originalen Index zuverlässig
-  function findOriginalIndex(entry) {
-    // möglichst eindeutige Felder vergleichen: unix + command (+ successful falls vorhanden)
-    return originalHistory.findIndex(e =>
-      e.unix === entry.unix &&
-      (e.command === entry.command) &&
-      (typeof e.successful === 'undefined' || e.successful === entry.successful)
-    );
-  }
 
   const pages = [];
   let currentPage = [];
 
-  for (let i = 0; i < sortedHistory.length; i++) {
-    currentPage.push(sortedHistory[i]);
+  for (let i = 0; i < historyButtons.length; i++) {
+    currentPage.push(historyButtons[i]);
 
     if (currentPage.length >= 20) {
       // move last 5 entries into a new page
@@ -5159,7 +5377,7 @@ function command_history_menu(player) {
     f.body("Select a command!");
     const pageActions = [];
 
-    if (!utcSet && originalHistory.length > 9 && player.playerPermissionLevel === 2 && pageIndex === 0) {
+    if (!utcSet && historyButtons.length > 9 && player.playerPermissionLevel === 2 && pageIndex === 0) {
       f.label("§7Confusing? Enter your time zone!");
       f.button("Time zone", "textures/ui/world_glyph_color_2x");
       pageActions.push(() => settings_time_zone(player, 0));
@@ -5169,10 +5387,10 @@ function command_history_menu(player) {
 
     // gleiche Gruppierungslogik wie vorher, aber nur für diese Seite
     let lastGroup = null;
-    page.forEach(entry => {
+    page.forEach(buttonEntry => {
 
-      const diffSec = now - entry.unix;
-      const { group, label: baseLabel } = determineGroupLabel(entry.unix);
+      const diffSec = now - buttonEntry.entry.unix;
+      const { group, label: baseLabel } = determineGroupLabel(buttonEntry.entry.unix);
 
       // Labels nur anzeigen, wenn utc gesetzt ist UND es ein nicht-leeres Label gibt
       if (group !== lastGroup && utcSet && baseLabel) {
@@ -5185,31 +5403,8 @@ function command_history_menu(player) {
         lastGroup = group;
       }
 
-      const cmdName = (entry.command || "").split(" ")[0].replace(/^\//, "").toLowerCase();
-      const statusText = entry.successful ? "§2ran§r" : "§cfailed§r";
-      const relativeTime = getRelativeTime(diffSec);
-
-      let matchingCommand = command_list.find(cmd =>
-        Array.isArray(cmd.aliases) &&
-        cmd.aliases.map(a => a.toLowerCase()).includes(cmdName)
-      );
-
-      let texture = matchingCommand && matchingCommand.textures
-        ? matchingCommand.textures
-        : "textures/ui/chat_send";
-
-      f.button(`/${cmdName}\n${statusText} | ${relativeTime} ago`, texture);
-
-      const originalIndex = findOriginalIndex(entry);
-      const indexToPass = originalIndex !== -1 ? originalIndex : sortedHistory.indexOf(entry);
-
-      pageActions.push(() => {
-        if (saveData[playerIndex].quick_run) {
-          execute_command(player, entry.command, player);
-        } else {
-          command_menu(player, entry.command, indexToPass);
-        }
-      });
+      f.button(buttonEntry.label, buttonEntry.icon);
+      pageActions.push(buttonEntry.actionFn);
     });
 
     f.divider();
@@ -5244,8 +5439,6 @@ function command_history_menu(player) {
   // Start on the first page
   showPage(0);
 }
-
-
 
 function command_menu(player, command, history_index) {
   let save_data = load_save_data();
@@ -5339,7 +5532,6 @@ function command_menu(player, command, history_index) {
     execute_command(player, cmd, targetIdentity);
   });
 }
-
 
 /*------------------------
  execute a Command
@@ -5524,177 +5716,6 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
     }
   });
 }
-
-
-/*------------------------
- new command
--------------------------*/
-
-function visual_command(player) {
-  let form = new ActionFormData();
-  let actions = [];
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  form.title("New Command");
-  form.body("General");
-
-  // --- General ---
-  form.button("Typing", "textures/ui/chat_send");
-  actions.push(() => { command_menu(player); });
-
-  form.divider();
-
-  // --- Listen durch Helper erzeugen ---
-  const {
-    recommendedEntries,
-    optimizedEntries,
-    unoptimizedEntries,
-    allEntries
-  } = generate_command_lists(player, !save_data[player_sd_index].recommendations);
-
-  // --- Recommended ---
-  if (recommendedEntries.length) {
-    form.label("Recommended");
-
-    const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
-
-    recommendedEntries
-      .slice(0, displayCount)
-      .forEach(e => {
-        form.button(e.label, e.icon);
-        actions.push(e.actionFn);
-      });
-
-    if (recommendedEntries.length > displayCount) {
-      form.button("Show more!");
-      actions.push(() => visual_command_overview(player, recommendedEntries));
-    }
-
-    form.divider();
-  }
-
-  // --- Optimized ---
-  if (optimizedEntries.length) {
-    form.label("Optimized");
-
-    const displayCount = optimizedEntries.length >= 4 ? 2 : 3;
-
-    optimizedEntries
-      .slice(0, displayCount)
-      .forEach(e => {
-        form.button(e.label, e.icon);
-        actions.push(e.actionFn);
-      });
-
-    if (optimizedEntries.length > displayCount) {
-      form.button("Show more!");
-      actions.push(() => visual_command_overview(player, optimizedEntries));
-    }
-
-    form.divider();
-  }
-
-
-
-  // --- Show all commands ---
-  if (allEntries.length > 0) {
-    form.button("Show all commands", "textures/ui/more-dots");
-    actions.push(() => visual_command_overview(player, allEntries));
-  }
-
-  // --- Back button ---
-  form.button("");
-  actions.push(() => main_menu(player));
-
-  // --- Show Form ---
-  form.show(player).then(response => {
-    if (response.selection === undefined) return;
-    const idx = response.selection;
-    if (actions[idx]) actions[idx]();
-  });
-}
-
-function visual_command_overview(player, entries) {
-  let form = new ActionFormData();
-  let actions = [];
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  form.title("More Commands");
-  form.body("Select a command!");
-
-  // Hilfsfunktion: erstes sichtbares Zeichen normalisieren und Gruppe bestimmen
-  function getGroupLetter(text) {
-    if (!text) return '#';
-    // Trim left to ignore führende Leerzeichen
-    const trimmed = text.trimLeft();
-    if (trimmed.length === 0) return '#';
-    let ch = trimmed[0];
-
-    // Kleinschreibung für Vergleich
-    ch = ch.toLowerCase();
-
-    // A-Z ?
-    if (ch >= 'a' && ch <= 'z') {
-      return ch.toUpperCase(); // A..Z
-    }
-
-    // Alles andere -> '#'
-    return '#';
-  }
-
-  // Gruppen zusammenstellen (Erhalt der Reihenfolge innerhalb jeder Gruppe)
-  const groups = {};
-  for (const e of entries) {
-    const labelText = typeof e.label === 'string' ? e.label : '';
-    const g = getGroupLetter(labelText);
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(e);
-  }
-
-  // Reihenfolge: A..Z, danach '#' (falls vorhanden)
-  for (let i = 0; i < 26; i++) {
-    const letter = String.fromCharCode(65 + i); // 'A'..'Z'
-    if (groups[letter] && groups[letter].length > 0) {
-      form.label(letter);
-      for (const e of groups[letter]) {
-        if (e.icon) form.button(e.label, e.icon);
-        else form.button(e.label, "textures/ui/chat_send");
-        actions.push(e.actionFn);
-      }
-      form.divider(); // optional: Trennung zwischen Buchstabenblöcken
-    }
-  }
-
-  // '#' Gruppe (nicht A-Z oder nicht erkannte Zeichen)
-  if (groups['#'] && groups['#'].length > 0) {
-    form.label('#');
-    for (const e of groups['#']) {
-      if (e.icon) form.button(e.label, e.icon);
-      else form.button(e.label, "textures/ui/chat_send");
-      actions.push(e.actionFn);
-    }
-    form.divider();
-  }
-
-  // Zurück-Button (ohne spezielles Label)
-  form.button("");
-  actions.push(() => visual_command(player));
-
-  // Anzeige und Auswertung
-  form.show(player).then((response) => {
-    if (response.selection === undefined) {
-      return -1;
-    }
-    const idx = response.selection;
-    if (actions[idx]) {
-      actions[idx]();
-    }
-  });
-}
-
-
 
 /*------------------------
  chain commands
@@ -6165,6 +6186,156 @@ function execute_chain(player, chainIndex) {
 }
 
 /*------------------------
+ new command
+-------------------------*/
+
+function visual_command(player) {
+  let form = new ActionFormData();
+  let actions = [];
+  let save_data = load_save_data();
+  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+  form.title("New Command");
+  form.body("General");
+
+  // --- General ---
+  form.button("Typing", "textures/ui/chat_send");
+  actions.push(() => { command_menu(player); });
+
+  form.divider();
+
+  // --- Listen durch Helper erzeugen ---
+  const {recommendedEntries, allEntries, categoryLists} = generate_command_lists(player);
+
+  // --- Recommended ---
+  if (recommendedEntries.length) {
+    form.label("Recommended");
+
+    const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
+
+    recommendedEntries
+      .slice(0, displayCount)
+      .forEach(e => {
+        form.button(e.label, e.icon);
+        actions.push(e.actionFn);
+      });
+
+    if (recommendedEntries.length > displayCount) {
+      form.button("Show more!");
+      actions.push(() => visual_command_overview(player, recommendedEntries));
+    }
+
+    form.divider();
+  }
+
+  // --- Categories ---
+  form.label("Categories");
+  for (const cat of categoryLists) {
+    const label = `${cat.category.name}\n§o${cat.category.description}§r`;
+    form.button(label, cat.category.icon);
+    actions.push(() => visual_command_overview(player, cat.entries));
+  }
+  form.divider();
+
+  // --- Show all commands ---
+  if (allEntries.length > 0) {
+    form.button("Show all commands", "textures/ui/more-dots");
+    actions.push(() => visual_command_overview(player, allEntries));
+  }
+
+  // --- Back button ---
+  form.button("");
+  actions.push(() => main_menu(player));
+
+  // --- Show Form ---
+  form.show(player).then(response => {
+    if (response.selection === undefined) return;
+    const idx = response.selection;
+    if (actions[idx]) actions[idx]();
+  });
+}
+
+function visual_command_overview(player, entries) {
+  let form = new ActionFormData();
+  let actions = [];
+  let save_data = load_save_data();
+  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+  form.title("More Commands");
+  form.body("Select a command!");
+
+  // Hilfsfunktion: erstes sichtbares Zeichen normalisieren und Gruppe bestimmen
+  function getGroupLetter(text) {
+    if (!text) return '#';
+    // Trim left to ignore führende Leerzeichen
+    const trimmed = text.trimLeft();
+    if (trimmed.length === 0) return '#';
+    let ch = trimmed[0];
+
+    // Kleinschreibung für Vergleich
+    ch = ch.toLowerCase();
+
+    // A-Z ?
+    if (ch >= 'a' && ch <= 'z') {
+      return ch.toUpperCase(); // A..Z
+    }
+
+    // Alles andere -> '#'
+    return '#';
+  }
+
+  // Gruppen zusammenstellen (Erhalt der Reihenfolge innerhalb jeder Gruppe)
+  const groups = {};
+  for (const e of entries) {
+    const labelText = typeof e.label === 'string' ? e.label : '';
+    const g = getGroupLetter(labelText);
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(e);
+  }
+
+  // Reihenfolge: A..Z, danach '#' (falls vorhanden)
+  for (let i = 0; i < 26; i++) {
+    const letter = String.fromCharCode(65 + i); // 'A'..'Z'
+    if (groups[letter] && groups[letter].length > 0) {
+      form.label(letter);
+      for (const e of groups[letter]) {
+        if (e.icon) form.button(e.label, e.icon);
+        else form.button(e.label, "textures/ui/chat_send");
+        actions.push(e.actionFn);
+      }
+      form.divider(); // optional: Trennung zwischen Buchstabenblöcken
+    }
+  }
+
+  // '#' Gruppe (nicht A-Z oder nicht erkannte Zeichen)
+  if (groups['#'] && groups['#'].length > 0) {
+    form.label('#');
+    for (const e of groups['#']) {
+      if (e.icon) form.button(e.label, e.icon);
+      else form.button(e.label, "textures/ui/chat_send");
+      actions.push(e.actionFn);
+    }
+    form.divider();
+  }
+
+  // Zurück-Button (ohne spezielles Label)
+  form.button("");
+  actions.push(() => visual_command(player));
+
+  // Anzeige und Auswertung
+  form.show(player).then((response) => {
+    if (response.selection === undefined) {
+      return -1;
+    }
+    const idx = response.selection;
+    if (actions[idx]) {
+      actions[idx]();
+    }
+  });
+}
+
+
+/*------------------------
  visual_command: generic commands
 -------------------------*/
 
@@ -6200,7 +6371,7 @@ async function visual_command_generic(player, cmd) {
         }
 
       } else if (part.type === "blocktype") {
-        let result = await menu_blocktype_input(player, {
+        let result = await menu_text_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Enter blocktype: ` + part.name,
           optional: part.optional || false

@@ -5,34 +5,46 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B041",
+  build: "B042",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1774986606,
+  unix: 1775255846,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Chains can now be executed with custom commands",
+      "Chains can now be accessed & executed with custom commands",
+      "History can now be accessed with custom commands",
+      "Settings can now be accessed with custom commands",
       "Added support for icons in chain commands",
       "Added location insertion for visual command menu",
-      "Added Categories for commands",
-      "Restructured the main menu layout"
+      "Rebranded Gesture settings to Shortcuts",
+      "Restructured the main menu layout",
+      "Restructured the Permission menu",
+      "Added a new Storage menu to view and manage save data",
       // New about page
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
     general_changes: [
       // Add parallel syntaxes
-      "Rebranded Gesture settings to Shortcuts",
+      "Added Categories for commands",
+      "The Main menu can now be disabled by administrators",
+      "Chains can now be disabled by administrators",
+      "Main Menu preferences can now be viewed and managed by administrators",
       "Improved the logic for command syntax fixing.",
       "Chains now appear in the history list.",
+      "Client Information in the Permission menu is now more detailed and better organized",
+      "SD-Console dumps are now available for all release types"
+
     ],
     // bug_fixes
     bug_fixes: [
       "Fixed /structure command not working properly due to a wrong syntax structure",
       "Fixed weather visual command not working properly due to a wrong parameter type",
       "Fixed the visual enchant command, which wouldn't close the menu properly with quick run enabled",
-      "Custom commands executed by other entities contains a failed message"
+      "Custom commands executed by other entities contains a failed message",
+      "Fixed missing title in the allowed commands menu",
+      "Fixed BlockTypes, EntityTypes & ItemTypes not working properly in custom command",
     ]
 
   }
@@ -2829,7 +2841,7 @@ system.afterEvents.scriptEventReceive.subscribe(async event=> {
     }
 
     // Will open the main menu of your addon
-    if (data.event == "mm_open" && data.data.target == version_info.uuid) {
+    if (data.event == "mm_open" && data.data.target == version_info.uuid && canPlayerUseMenu(player)) {
         main_menu(player);
         world.scoreboard.removeObjective("mm_data")
     }
@@ -2972,10 +2984,12 @@ function registerAllCommands(init) {
     if (Array.isArray(v)) return v.map(formatArg).join(" ");
 
     if (typeof v === "object") {
+      // Location
       const { x, y, z, X, Y, Z, id } = v;
       if (x ?? X ?? y ?? Y ?? z ?? Z)
         return [x ?? X, y ?? Y, z ?? Z].filter(Boolean).join(" ");
 
+      // Player or Entity
       if (id && Number(id)) {
         const p = world.getAllPlayers().find(e => e.id === id);
         if (p) return p.name;
@@ -2983,7 +2997,15 @@ function registerAllCommands(init) {
         if (e) return `@e[x=${e.location.x},y=${e.location.y},z=${e.location.z},r=20,type=!player,c=1]`;
         return String(id);
       }
+
+      // Blocks
+      if (v.id) {
+        return v.id
+      }
+
+
     }
+    print("Unknown object:" + JSON.stringify(v));
     return String(v);
   }
 
@@ -3010,11 +3032,33 @@ function registerAllCommands(init) {
     permissionLevel: CommandPermissionLevel.Any,
     cheatsRequired: false,
     handler: p => {
-      system.run(() => system_privileges == 1 ? multiple_menu(p) : main_menu(p));
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) ? main_menu(p) : null);
+    }
+  });
+
+  registerMenuCommand({
+    name: "com2hard:history",
+    description: "Opens the History menu",
+    permissionLevel: CommandPermissionLevel.Any,
+    cheatsRequired: false,
+    handler: p => {
+      system.run(() => command_history_menu(p));
+    }
+  });
+
+  registerMenuCommand({
+    name: "com2hard:settings",
+    description: "Opens the Settings menu",
+    permissionLevel: CommandPermissionLevel.Any,
+    cheatsRequired: false,
+    handler: p => {
+      system.run(() => settings_main(p));
     }
   });
 
   /* ---------- built-in commands ---------- */
+
+  init.customCommandRegistry.registerEnum("com2hard:chain_executionMode", ["execute", "edit"]);
 
   init.customCommandRegistry.registerCommand({
       name: "com2hard:chain",
@@ -3022,30 +3066,29 @@ function registerAllCommands(init) {
       permissionLevel: CommandPermissionLevel.Any,
       cheatsRequired: false,
       optionalParameters: [
-        { type: CustomCommandParamType.Integer, name: "chainIndex" }
+        { type: CustomCommandParamType.Integer, name: "chainIndex" },
+        { type: CustomCommandParamType.Enum, name: "com2hard:chain_executionMode"}
       ],
-    }, (origin, chainIndex) => {
+    }, (origin, chainIndex, chain_executionMode) => {
       const player = origin.sourceEntity;
       if (!isPlayer(player)) return {
         status: CustomCommandStatus.Failure,
         message: "The command source must be a player to execute a command chain"
       };
 
-      const save_data = load_save_data();
-      const playerData = save_data.find(d => d.id === player.id);
-      const chains = Array.isArray(playerData?.chain_commands) ? playerData.chain_commands : [];
-
-      if (chainIndex === undefined) {
-        return {
-          status: CustomCommandStatus.Failure,
-          message: "Please provide a valid chain index." +
-            (chains.length > 0 ? " Possible ids:\n" +
-                chains.map((c, idx) => `${idx} for ${c.name ?? "<unnamed>"}`).join("\n") : "")
-        };
-      }
+      if (canPlayerUseChains(player) === false) return {
+        status: CustomCommandStatus.Failure,
+        message: "You are restricted from using chain commands by your Admin"
+      };
 
       system.run(() => {
-        execute_chain(player, chainIndex);
+        if (chainIndex === undefined) {
+          chain_overview(player);
+        } else if (chain_executionMode === "edit") {
+          chain_main(player, chainIndex);
+        } else {
+          execute_chain(player, chainIndex);
+        }
       });
   });
 
@@ -3378,6 +3421,8 @@ function create_player_save_data(playerId, playerName) {
       command_history: [],
       quick_run: false,
       recommendations: true,
+      allow_menu: true,
+      allow_chains: true,
       chain_commands: [],
       allowed_commands: [],
   });
@@ -3481,7 +3526,7 @@ world.beforeEvents.itemUse.subscribe(event => {
       system.run(() => {
         if (system_privileges !== 0) {
           event.source.playSound("random.pop2")
-          system_privileges == 1 ? multiple_menu(event.source) : main_menu(event.source);
+          system_privileges == 1 ? multiple_menu(event.source) : canPlayerUseMenu(event.source) ? main_menu(event.source) : null;
         }
       });
   }
@@ -3512,7 +3557,7 @@ async function gesture_jump() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.sneak && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : main_menu(player);
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
       }
 
       gestureCooldowns_jump.set(player.id, now);
@@ -3546,7 +3591,7 @@ async function gesture_emote() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.emote && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : main_menu(player);
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
       }
 
       gestureCooldowns_emote.set(player.id, now);
@@ -3583,7 +3628,7 @@ async function gesture_nod() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.nod && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : main_menu(player);
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
       }
 
       state = "idle";
@@ -3608,6 +3653,28 @@ function print(input) {
   if (version_info.release_type === 0) {
     console.log(version_info.name + " - " + JSON.stringify(input))
   }
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} Bytes`;
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(2)} KB`;
+    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(2)} MB`;
+    if (bytes < 1024 ** 4) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
+}
+
+function getBytesfromSDindex(sdEntry) {
+    if (!sdEntry) return { bytes: 0, chunks: [] };
+
+    const json = JSON.stringify(sdEntry);
+
+    if (typeof TextEncoder !== "undefined") {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(json).length;
+        return { bytes, chunks: [] };
+    } else {
+        return { bytes: json.length * 2, chunks: [] };
+    }
 }
 
 function markdownToMinecraft(md) {
@@ -3954,7 +4021,7 @@ function generate_history_entries(player) {
       };
     });
 
-  const chainEntries = (playerIndex !== -1 && Array.isArray(saveData[playerIndex].chain_commands))
+  const chainEntries = (playerIndex !== -1 && Array.isArray(saveData[playerIndex].chain_commands) && canPlayerUseChains(player))
     ? saveData[playerIndex].chain_commands
         .map((chain, index) => ({ chain, index }))
         .filter(({ chain }) => chain?.state?.unix != null)
@@ -3983,6 +4050,20 @@ function generate_history_entries(player) {
     .sort((a, b) => b.entry.unix - a.entry.unix);
 
   return allEntrys;
+}
+
+function canPlayerUseMenu(player, player_sd_index) {
+  const save_data = load_save_data();
+  player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
+  if (player.playerPermissionLevel === 2) return true; // Admins immer Zugriff
+  return save_data[player_sd_index].allow_menu;
+}
+
+function canPlayerUseChains(player, player_sd_index) {
+  const save_data = load_save_data();
+  player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
+  if (player.playerPermissionLevel === 2) return true; // Admins immer Zugriff
+  return save_data[player_sd_index].allow_chains;
 }
 
 /*------------------------
@@ -5128,98 +5209,101 @@ function main_menu(player) {
   if (player.playerPermissionLevel !== 2 && save_data[player_sd_index].allowed_commands.length == 0) {
     form.label("§7There are no commands you are allowed to run! Ask your Admin.")
   } else {
+
     form.button("Run a command", "textures/ui/color_plus");
     actions.push(() => {
       visual_command(player);
     });
 
-    form.button("Chain Commands", "textures/items/chain");
-    actions.push(() => {
-      chain_overview(player);
-    });
-  }
-
-  /*------------------------
-    Preview panel
-  -------------------------*/
-
-
-  // Chain Commands panel
-  if (!recommendVisible && pinedChains) {
-    form.divider();
-    form.label("Pined Chains");
-
-    // Sortierte Kopie: pined zuerst, dann alphabetisch nach name
-    let sorted_chains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).slice().sort((a, b) => {
-      let nameA = (a.name || "").toLowerCase();
-      let nameB = (b.name || "").toLowerCase();
-      if (nameA < nameB) return -1;
-      if (nameA > nameB) return 1;
-      return 0;
-    });
-
-    for (let i = 0; i < sorted_chains.length; i++) {
-      let chain = sorted_chains[i];
-
-      const cmdName = chain.name || "Unnamed Chain";
-      const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
-
-      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
-
-      // Closure damit jeder Button das richtige chain referenziert
-      actions.push(((ch) => {
-        return () => {
-          // Originalindex in der unveränderten Liste ermitteln
-          let originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === ch);
-          if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
-            execute_chain(player, originalIndex);
-          } else {
-            chain_main(player, originalIndex);
-          }
-        };
-      })(chain));
-    }
-  }
-
-  // History panel
-  if (!recommendVisible && hasHistory && !pinedChains) {
-    form.divider();
-    form.label("History");
-
-    const historyButtons = generate_history_entries(player);
-    const previewHistory = historyButtons.slice(0, historyButtons.length > 3 ? 2 : 3);
-
-    previewHistory.forEach((buttonEntry) => {
-      form.button(buttonEntry.label, buttonEntry.icon);
-      actions.push(buttonEntry.actionFn);
-    });
-
-    if (historyButtons.length > 3) {
-      form.button("Show more!");
+    if (canPlayerUseChains(player)) {
+      form.button("Chain Commands", "textures/items/chain");
       actions.push(() => {
-        command_history_menu(player);
+        chain_overview(player);
       });
     }
-  }
 
-  // Recommended panel
-  if (recommendVisible) {
-    form.divider();
-    form.label("Recommended");
+    /*------------------------
+      Preview panel
+    -------------------------*/
 
-    const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
 
-    recommendedEntries
-      .slice(0, displayCount)
-      .forEach(e => {
-        form.button(e.label, e.icon);
-        actions.push(e.actionFn);
+    // Chain Commands panel
+    if (!recommendVisible && pinedChains && canPlayerUseChains(player)) {
+      form.divider();
+      form.label("Pined Chains");
+
+      // Sortierte Kopie: pined zuerst, dann alphabetisch nach name
+      let sorted_chains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).slice().sort((a, b) => {
+        let nameA = (a.name || "").toLowerCase();
+        let nameB = (b.name || "").toLowerCase();
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        return 0;
       });
 
-    if (recommendedEntries.length > displayCount) {
-      form.button("Show more!");
-      actions.push(() => visual_command_overview(player, recommendedEntries));
+      for (let i = 0; i < sorted_chains.length; i++) {
+        let chain = sorted_chains[i];
+
+        const cmdName = chain.name || "Unnamed Chain";
+        const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
+        const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+
+        form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
+
+        // Closure damit jeder Button das richtige chain referenziert
+        actions.push(((ch) => {
+          return () => {
+            // Originalindex in der unveränderten Liste ermitteln
+            let originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === ch);
+            if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
+              execute_chain(player, originalIndex);
+            } else {
+              chain_main(player, originalIndex);
+            }
+          };
+        })(chain));
+      }
+    }
+
+    // History panel
+    if (!recommendVisible && hasHistory && !pinedChains) {
+      form.divider();
+      form.label("History");
+
+      const historyButtons = generate_history_entries(player);
+      const previewHistory = historyButtons.slice(0, historyButtons.length > 3 ? 2 : 3);
+
+      previewHistory.forEach((buttonEntry) => {
+        form.button(buttonEntry.label, buttonEntry.icon);
+        actions.push(buttonEntry.actionFn);
+      });
+
+      if (historyButtons.length > 3) {
+        form.button("Show more!");
+        actions.push(() => {
+          command_history_menu(player);
+        });
+      }
+    }
+
+    // Recommended panel
+    if (recommendVisible) {
+      form.divider();
+      form.label("Recommended");
+
+      const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
+
+      recommendedEntries
+        .slice(0, displayCount)
+        .forEach(e => {
+          form.button(e.label, e.icon);
+          actions.push(e.actionFn);
+        });
+
+      if (recommendedEntries.length > displayCount) {
+        form.button("Show more!");
+        actions.push(() => visual_command_overview(player, recommendedEntries));
+      }
     }
   }
 
@@ -5270,13 +5354,14 @@ function main_menu(player) {
 -------------------------*/
 
 function command_history_menu(player) {
-  const saveData = load_save_data();
+  const save_data = load_save_data();
+  const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
   const historyButtons = generate_history_entries(player);
 
   const now = Math.floor(Date.now() / 1000);
-  const utcSet = Boolean(saveData[0]?.utc);
-  const utcOffsetMinutes = utcSet ? Math.round((saveData[0].utc || 0) * 60) : 0; // default 0 wenn nicht gesetzt
+  const utcSet = Boolean(save_data[0]?.utc);
+  const utcOffsetMinutes = utcSet ? Math.round((save_data[0].utc || 0) * 60) : 0; // default 0 wenn nicht gesetzt
 
   // Lokalzeit / Mitternacht-Grenzen (wenn utc nicht gesetzt, verwenden wir einfach lokale timestamps ohne Offset-Anpassung)
   const nowLocal = new Date((now + utcOffsetMinutes * 60) * 1000);
@@ -5420,13 +5505,15 @@ function command_history_menu(player) {
       pageActions.push(() => showPage(pageIndex + 1));
     }
 
-    if (pageIndex > 0 || pageIndex < pages.length - 1) {
-      f.divider();
-    }
-
     // Always add main menu button at the end
-    f.button("");
-    pageActions.push(() => main_menu(player));
+    if (canPlayerUseMenu(player)) {
+      if (pageIndex > 0 || pageIndex < pages.length - 1) {
+        f.divider();
+      }
+
+      f.button("");
+      pageActions.push(() => main_menu(player));
+    }
 
     // Show the form for this page
     f.show(player).then(response => {
@@ -5465,7 +5552,7 @@ function command_menu(player, command, history_index) {
     form.label(history_data.successful ? "§2Command executed successfully§r" : "§cCommand failed to execute§r");
     form.label(save_data[0].utc === undefined ? "§7§oTime: " + getRelativeTime(Math.floor(Date.now() / 1000) - history_data.unix, player) + " ago" : "§7§oDate: " + `${build_date.day}.${build_date.month}.${build_date.year}`);
     form.toggle((version_info.release_type == 0? "Hide from history" : "Delete from history"), {tooltip: "If enabled, this command will be removed from your history after submitting the form."});
-  } else {
+  } else if (canPlayerUseMenu(player)) {
     form.toggle("Pin to Main Menu", {tooltip: "If enabled, this command will be added to your main menu for quick access."});
   }
 
@@ -5484,7 +5571,7 @@ function command_menu(player, command, history_index) {
     }
 
     if (!cmdVal || deleteToggle) {
-      return typeof(history_index) === "number" ? (save_data[player_sd_index].command_history.some(entry => !entry.hidden) > 3 ? command_history_menu(player) : main_menu(player)) : visual_command(player);
+      return typeof(history_index) === "number" ? command_history_menu(player) : visual_command(player);
     }
 
     if (typeof(history_index) !== "number" && pinToggle) {
@@ -5698,13 +5785,15 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
   form.button("Try again");
   actions.push(() => {
     command_menu(player, command);
-    form.divider();
   });
 
-  form.button("");
-  actions.push(() => {
-    main_menu(player);
-  });
+  if (canPlayerUseMenu(player)) {
+    form.divider();
+    form.button("");
+    actions.push(() => {
+      main_menu(player);
+    });
+  }
 
   form.show(player).then((response) => {
     if (response.selection == undefined) {
@@ -5769,22 +5858,22 @@ function chain_overview(player) {
   if (pinedChains.length > 0) {
     form.label("Pinned Chains")
     pinedChains.forEach(chain => {
-    const cmdName = chain.name || "Unnamed Chain";
-    const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-    const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+      const cmdName = chain.name || "Unnamed Chain";
+      const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
+      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
 
-    form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
-    actions.push(() => {
-      let originalIndex = chain_commands.findIndex(c => c === chain);
-      if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
-        execute_chain(player, originalIndex);
-      } else {
-        chain_main(player, originalIndex);
-      }
+      form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
+      actions.push(() => {
+        let originalIndex = chain_commands.findIndex(c => c === chain);
+        if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
+          execute_chain(player, originalIndex);
+        } else {
+          chain_main(player, originalIndex);
+        }
+      });
     });
-  });
 
-  form.divider();
+    if (canPlayerUseMenu(player) || unpinedChains.length > 0) form.divider();
   }
 
 
@@ -5809,14 +5898,16 @@ function chain_overview(player) {
       });
     });
 
-    form.divider();
+    if (canPlayerUseMenu(player)) form.divider();
   }
 
 
-  form.button("");
-  actions.push(() => {
-    main_menu(player);
-  });
+  if (canPlayerUseMenu(player)) {
+    form.button("");
+    actions.push(() => {
+      main_menu(player);
+    });
+  }
 
   form.show(player).then((response) => {
     if (response.selection == undefined) return -1;
@@ -6018,7 +6109,7 @@ function chain_edit(player, chainIndex, setup = false) {
     if (chain.commands.length !== 0) {
       form.button("Save", "textures/ui/check");
       actions.push(() => {
-        main_menu(player);
+        chain_overview(player);
       });
     }
 
@@ -6147,6 +6238,10 @@ function execute_chain(player, chainIndex) {
       try {
         let result;
 
+        if (canPlayerUseChains(player) === false) {
+          throw new Error(`You are restriced from using chain commands by your Admin`);
+        }
+
         if (isCommandAvailable(player, cmd) === false) {
           throw new Error(`${cmd} is restriced by your Admin`);
         } else {
@@ -6229,13 +6324,16 @@ function visual_command(player) {
   }
 
   // --- Categories ---
-  form.label("Categories");
-  for (const cat of categoryLists) {
-    const label = `${cat.category.name}\n§o${cat.category.description}§r`;
-    form.button(label, cat.category.icon);
-    actions.push(() => visual_command_overview(player, cat.entries));
+  if (categoryLists.length > 0) {
+    form.label("Categories");
+    for (const cat of categoryLists) {
+      const label = `${cat.category.name}\n§o${cat.category.description}§r`;
+      form.button(label, cat.category.icon);
+      actions.push(() => visual_command_overview(player, cat.entries));
+    }
+    form.divider();
   }
-  form.divider();
+
 
   // --- Show all commands ---
   if (allEntries.length > 0) {
@@ -6244,8 +6342,10 @@ function visual_command(player) {
   }
 
   // --- Back button ---
-  form.button("");
-  actions.push(() => main_menu(player));
+  if (canPlayerUseMenu(player)) {
+    form.button("");
+    actions.push(() => main_menu(player));
+  }
 
   // --- Show Form ---
   form.show(player).then(response => {
@@ -7139,37 +7239,57 @@ function visual_command_gamemode(player) {
  Settings
 -------------------------*/
 
-function settings_main(player) {
+function settings_main(viewing_player, input_sd_index) {
   let form = new ActionFormData();
   let actions = [];
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  form.title("Settings");
+  let save_data = load_save_data();
+  let player_sd_index = input_sd_index !== undefined ? input_sd_index : save_data.findIndex(entry => entry.id === viewing_player.id);
+  let is_admin_mode = input_sd_index !== undefined;
+
+  form.title("Settings" + (is_admin_mode ? " - " + save_data[player_sd_index].name : ""));
   form.body("Main Menu");
 
+  // Status
+  if (is_admin_mode) {
+    form.button("Status\n" + (save_data[player_sd_index].allow_menu ? "§aon" : "§coff"), save_data[player_sd_index].allow_menu ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
+    actions.push(() => {
+      if (!save_data[player_sd_index].allow_menu) {
+        save_data[player_sd_index].allow_menu = true;
+      } else {
+        save_data[player_sd_index].allow_menu = false;
+      }
+      update_save_data(save_data);
+      settings_main(viewing_player, input_sd_index);
+    });
+  }
+
   // Shortcuts
-  form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
-  actions.push(() => {
-    settings_shortcuts(player)
-  });
+  if (canPlayerUseMenu(viewing_player, player_sd_index)) {
+    form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
+    actions.push(() => {
+      settings_shortcuts(viewing_player, input_sd_index);
+    });
 
   // Recommendations
-  form.button("Recommendations\n" + (save_data[player_sd_index].recommendations ? "§aon" : "§coff"), "textures/ui/realms_particles");
-  actions.push(() => {
-    if (!save_data[player_sd_index].recommendations) {
-      save_data[player_sd_index].recommendations = true;
-    } else {
-      save_data[player_sd_index].recommendations = false;
-    }
-    update_save_data(save_data);
-    settings_main(player);
-  });
+    form.button("Recommendations\n" + (save_data[player_sd_index].recommendations ? "§aon" : "§coff"), "textures/ui/realms_particles");
+    actions.push(() => {
+      if (!save_data[player_sd_index].recommendations) {
+        save_data[player_sd_index].recommendations = true;
+      } else {
+        save_data[player_sd_index].recommendations = false;
+      }
+      update_save_data(save_data);
+      settings_main(viewing_player, input_sd_index);
+    });
+  } else if (!is_admin_mode) {
+    form.label("§7The Main menu is currently disabled.");
+  }
 
   form.divider()
 
-  // Permission
-  if (player.playerPermissionLevel === 2) {
+  // Multiplayer
+  if (viewing_player.playerPermissionLevel === 2 && !is_admin_mode) {
     form.label("Multiplayer");
 
     // Button 3: Permission
@@ -7206,7 +7326,7 @@ function settings_main(player) {
 
 
       form.button("Permission\n§9" + label, "textures/ui/op");
-      actions.push(() => settings_rights_main(player));
+      actions.push(() => settings_rights_main(viewing_player));
     }
 
 
@@ -7230,38 +7350,84 @@ function settings_main(player) {
 
     form.button(("Time zone") + (zone !== undefined? "\n§9"+zone_text : ""), "textures/ui/world_glyph_color_2x")
     actions.push(() => {
-      if (save_data[0].utc_auto) return settings_time_zone_preview(player, zone)
-      settings_time_zone(player, 0);
+      if (save_data[0].utc_auto) return settings_time_zone_preview(viewing_player, zone)
+      settings_time_zone(viewing_player, 0);
     });
     form.divider()
   }
 
-
-  form.label("Version");
-
-  // Button 5: Debug
-  if (version_info.release_type == 0 && player.playerPermissionLevel === 2) {
-    form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
+  // Commands
+  if (is_admin_mode) {
+    form.label("Commands");
+    let label = save_data[player_sd_index].allowed_commands.length > 0 ? "§9" + save_data[player_sd_index].allowed_commands.length + " allowed commands" : "";
+    form.button("Allowed commands\n" + label, "textures/ui/chat_send");
     actions.push(() => {
-      debug_main(player);
+      manage_command(viewing_player, input_sd_index);
+    });
+
+    form.button("Allow Chains\n" + (save_data[player_sd_index].allow_chains ? "§aon" : "§coff"), save_data[player_sd_index].allow_chains ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
+    actions.push(() => {
+      if (!save_data[player_sd_index].allow_chains) {
+        save_data[player_sd_index].allow_chains = true;
+      } else {
+        save_data[player_sd_index].allow_chains = false;
+      }
+      update_save_data(save_data);
+      settings_main(viewing_player, input_sd_index);
+    });
+
+    form.divider()
+  }
+
+
+
+  form.label("Other");
+
+  // Storage
+  if (viewing_player.playerPermissionLevel === 2) {
+    if (is_admin_mode) {
+      form.button("Storage\n§9" + formatBytes(getBytesfromSDindex(input_sd_index).bytes), "textures/ui/storageIconColor");
+      actions.push(() => {
+        settings_rights_manage_sd(viewing_player, save_data[input_sd_index]);
+      });
+    } else {
+      form.button("Storage\n§9" + formatBytes(world.getDynamicPropertyTotalByteCount()), "textures/ui/storageIconColor");
+      actions.push(() => {
+        settings_storage(viewing_player, input_sd_index);
+      });
+    }
+  }
+
+  if (!is_admin_mode) {
+    // Debug
+    if (version_info.release_type == 0 && viewing_player.playerPermissionLevel === 2) {
+      form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
+      actions.push(() => {
+        debug_main(viewing_player);
+      });
+    }
+  }
+
+  // Dictionary
+  form.button("About\n", "textures/ui/infobulb");
+  actions.push(() => {
+    is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player);
+  });
+
+
+
+  // Back to main menu
+  if (canPlayerUseMenu(viewing_player) || is_admin_mode) {
+    form.divider()
+    form.button("");
+    actions.push(() => {
+      is_admin_mode
+        ? settings_rights_main(viewing_player)
+        : main_menu(viewing_player);
     });
   }
 
-  // Button 6: Dictionary
-  form.button("About\n", "textures/ui/infobulb");
-  actions.push(() => {
-    dictionary_about(player, false)
-  });
-
-  form.divider()
-
-  // Back to main menu
-  form.button("");
-  actions.push(() => {
-    main_menu(player)
-  });
-
-  form.show(player).then((response) => {
+  form.show(viewing_player).then((response) => {
     if (response.selection == undefined ) {
       return -1
     }
@@ -7271,6 +7437,425 @@ function settings_main(player) {
     }
   });
 }
+
+/*------------------------
+ commands settings menu
+-------------------------*/
+
+function manage_command(viewing_player, input_sd_index) {
+  let form = new ActionFormData()
+  let actions = [];
+
+  let save_data = load_save_data();
+  let selected_save_data = save_data[input_sd_index];
+
+  const cmdList = Array.isArray(command_list) ? command_list : [];
+  const allowedIdxs = Array.isArray(selected_save_data.allowed_commands) ? selected_save_data.allowed_commands : [];
+
+  let allowedCommands = cmdList
+    .map((c, i) => ({ ...c, _index: i }))
+    .filter(item => allowedIdxs.includes(item._index));
+
+  let restrictedCommands = cmdList
+    .map((c, i) => ({ ...c, _index: i }))
+    .filter(item => !allowedIdxs.includes(item._index));
+
+  // Alphabetisch nach name sortieren
+  allowedCommands.sort((a, b) => a.name.localeCompare(b.name));
+  restrictedCommands.sort((a, b) => a.name.localeCompare(b.name));
+
+  form.title("Manage commands for " + selected_save_data.name);
+
+  // =========================
+  // Allowed commands
+  // =========================
+
+  let hasAllowed = false;
+  if (allowedCommands.length > 0) {
+    hasAllowed = true;
+
+    form.body(`§aAllowed commands (${allowedCommands.length}):`)
+        .divider();
+
+    allowedCommands.forEach((cmdObj) => {
+      form.button(`/${cmdObj.name}`);
+
+      actions.push(() => {
+        const sd = load_save_data();
+        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
+        if (saveIndex === -1) return;
+
+        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
+          ? sd[saveIndex].allowed_commands.slice()
+          : [];
+
+        const cmdIdx = cmdObj._index;
+        const pos = sd[saveIndex].allowed_commands.indexOf(cmdIdx);
+        if (pos !== -1) {
+          sd[saveIndex].allowed_commands.splice(pos, 1);
+        }
+
+        update_save_data(sd);
+        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
+        return manage_command(viewing_player, saveIndex);
+      });
+    });
+
+    form.divider();
+  }
+
+  // =========================
+  // Restricted commands
+  // =========================
+
+  if (restrictedCommands.length > 0) {
+    if (hasAllowed) {
+      // Already used body, so use label here
+      form.label(`§cRestricted commands (${restrictedCommands.length}):`)
+          .divider();
+    } else {
+      // No allowed commands shown, so restricted gets the body
+      form.body(`§cRestricted commands (${restrictedCommands.length}):`)
+          .divider();
+    }
+
+    restrictedCommands.forEach((cmdObj) => {
+      form.button(`/${cmdObj.name}`);
+
+      actions.push(() => {
+        const sd = load_save_data();
+        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
+        if (saveIndex === -1) return;
+
+        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
+          ? sd[saveIndex].allowed_commands.slice()
+          : [];
+
+        const cmdIdx = cmdObj._index;
+        if (!sd[saveIndex].allowed_commands.includes(cmdIdx)) {
+          sd[saveIndex].allowed_commands.push(cmdIdx);
+        }
+
+        update_save_data(sd);
+        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
+        return manage_command(viewing_player, saveIndex);
+      });
+    });
+
+    form.divider();
+  }
+
+  // =========================
+  // Back button
+  // =========================
+
+  form.button("");
+  actions.push(() => {
+    settings_main(viewing_player, input_sd_index);
+  });
+
+  // Formular anzeigen und Auswahl ausführen
+  form.show(viewing_player).then(response => {
+    if (response.selection == undefined ) {
+      return -1
+    }
+    const action = actions[response.selection];
+    if (action) action();
+  });
+}
+
+
+/*------------------------
+ storage
+-------------------------*/
+
+function settings_storage(player) {
+  let form = new ActionFormData();
+  let actions = [];
+
+  let save_data = load_save_data();
+  form.title("Storage");
+
+  const MAX = 32767; // Maximalgröße eines DynamicProperties-Strings
+
+  // ---------- Save-System ----------
+  const saveSize = world.getDynamicPropertyTotalByteCount();
+
+  let chunkCount = 0;
+  let maxChunkSize = 0;
+
+  while (true) {
+    const part = world.getDynamicProperty(`${BASE_KEY}_${chunkCount}`);
+    if (part === undefined || part === null) break;
+    const size = part.length;
+    if (size > maxChunkSize) maxChunkSize = size;
+    chunkCount++;
+  }
+
+  // ---------- Storage ----------
+  let lastChunk = world.getDynamicProperty(`${BASE_KEY}_${chunkCount - 1}`) || "";
+
+  const used = lastChunk.length;
+  const free = Math.max(0, MAX - used);
+  const percent = Math.floor((used / MAX) * 100);
+
+  let status = "§aLOW";
+  if (percent >= 90) status = "§cALLMOST FULL";
+  else if (percent >= 75) status = "§6HIGH";
+  else if (percent >= 50) status = "§eMEDIUM";
+
+  form.body("§lSave-System");
+  form.label("Used Chunks: " + chunkCount + "\n" +
+    "DynamicProperty Size: " + formatBytes(saveSize)
+  );
+
+  form.label("§lCurrent Chunk (" + chunkCount + ")");
+  form.label("Used: " + formatBytes(used) + " / " + formatBytes(MAX) + " (" + percent + " Percent)\n" +
+    "Free: " + formatBytes(free) + "\n" +
+    "Status: " + status
+  );
+
+  form.label("§7Explanation:\n" +
+    "The "+ version_info.name +" uses DynamicProperties to store data. Each property can hold up to "+ formatBytes(MAX) + " of data, corresponding to one chunk."
+  );
+
+  form.button("Player allocation", "textures/ui/storageIconColor");
+  actions.push(() => {
+    settings_storage_allocation(player);
+  });
+
+  form.button("Dump storage", "textures/ui/share_microsoft");
+  actions.push(() => {
+    dump_storage(player);
+  });
+
+  form.divider();
+
+  if (version_info.release_type === 0) {
+    form.label("Debug");
+    form.button("Editor", "textures/ui/editIcon");
+    actions.push(() => {
+      debug_sd_editor(player, () => debug_main(player), [])
+    });
+
+    form.button("§cRemove storage", "textures/ui/icon_trash");
+    actions.push(() => {
+      delete_save_data();
+      return close_world()
+    });
+    form.divider();
+  }
+
+  form.button("");
+  actions.push(() => {
+    settings_main(player);
+  });
+  form.show(player).then(response => {
+    if (response.selection == undefined ) {
+      return -1
+    }
+    const action = actions[response.selection];
+    if (action) action();
+  });
+}
+
+function dump_storage(player) {
+  let form = new ActionFormData();
+  let actions = [];
+
+  form.title("Dump storage");
+  let save_data = load_save_data();
+
+  form.body("Recommended way to dump");
+  form.button("Dump SD\nvia. server console");
+  actions.push(() => {
+    print(save_data)
+  });
+  form.label("§7If you are the host of the world, make sure that §lSettings -> Creator -> Enable Content Log File / GUI§r§7 is enabled to see the dump in your console.");
+
+  form.label("Alternative ways to dump");
+  form.button("Dump SD\nvia. privat chat");
+  actions.push(() => {
+    player.sendMessage("§l§7[§fSystem§7]§r SD Dump:\n"+JSON.stringify(save_data))
+  });
+
+  form.divider();
+
+  form.button("");
+  actions.push(() => {
+    settings_storage(player);
+  });
+
+  form.show(player).then(response => {
+    if (response.selection == undefined ) {
+      return -1
+    }
+    const action = actions[response.selection];
+    if (action) action();
+  });
+}
+
+function settings_storage_allocation(player) {
+  let form = new ActionFormData();
+  let actions = [];
+  let save_data = load_save_data();
+
+  let storage_distribution = save_data
+  .map((value, index) => {
+    return {
+      bytes: getBytesfromSDindex(value).bytes,
+      chunks: getBytesfromSDindex(value).chunks,
+      index: index
+    };
+  })
+  .sort((a, b) => b.bytes - a.bytes);
+
+  form.title("Storage - Player allocation");
+  form.body("This is the distribution of storage usage among the players & the system.");
+
+  storage_distribution.forEach(entry => {
+    const name = entry.index === 0 ? "System" : (save_data[entry.index]?.name || "Unknown");
+    form.button(`${name}\n§9${formatBytes(entry.bytes)}`, entry.index === 0 ? "textures/ui/storageIconColor" : "textures/ui/lan_icon");
+
+    actions.push(() => {
+      if (entry.index === 0) {
+        const info_form = new ActionFormData()
+          .title("System storage information")
+          .body("The system storage is used to store global data that is not specific to any player.\nThis includes data such as global configurations, and other information that is essential for the functioning of "+ version_info.name +".\nModifying or deleting system storage can lead to unexpected behavior or loss of important data.");
+
+        info_form.button("");
+        info_form.show(player).then(response => {
+          if (response.selection == undefined ) {
+            return -1
+          }
+          return settings_storage_allocation(player);
+        });
+      }
+      else {
+        settings_rights_manage_sd(player, save_data[entry.index]);
+      }
+    });
+  });
+
+  form.divider();
+
+  form.button("");
+  actions.push(() => {
+    settings_storage(player);
+  });
+
+  form.show(player).then(response => {
+    if (response.selection == undefined ) {
+      return -1
+    }
+    const action = actions[response.selection];
+    if (action) action();
+  });
+}
+
+function settings_rights_manage_sd(viewing_player, selected_save_data) {
+  let save_data = load_save_data()
+  const actions = [];
+  const form = new ActionFormData()
+    .title(`${selected_save_data.name}'s save data`)
+    .body("Select an option!")
+  const is_different_player = viewing_player.id !== selected_save_data.id;
+
+
+  form.button("§dReset save data")
+  actions.push(() => {
+    handle_data_action(true, false, viewing_player, selected_save_data);
+  });
+
+  form.button("§cDelete save data");
+  actions.push(() => {
+    handle_data_action(false, true, viewing_player, selected_save_data);
+  });
+
+
+  if (version_info.release_type == 0) {
+    form.divider()
+    form.button("§eOpen in SD Editor");
+    actions.push(() => {
+      debug_sd_editor(
+        viewing_player,
+        () => debug_sd_editor(viewing_player, () => debug_main(viewing_player), []),
+        [save_data.findIndex(entry => entry.id === selected_save_data.id)]
+      );
+    });
+  }
+
+  form.divider()
+  form.button("");
+  actions.push(() => {
+    is_different_player? settings_storage_allocation(viewing_player) : settings_main(viewing_player, save_data.findIndex(entry => entry.id === selected_save_data.id));
+  });
+
+  form.show(viewing_player).then(response => {
+    if (response.selection == undefined ) {
+      return -1
+    }
+    const action = actions[response.selection];
+    if (action) action();
+  });
+}
+
+function handle_data_action(is_reset, is_delete, viewing_player, selected_save_data) {
+  const selected_player = world.getAllPlayers().find(p => p.id === selected_save_data.id);
+  if (is_reset) {
+    delete_player_save_data(selected_save_data);
+    create_player_save_data(selected_save_data.id, selected_save_data.name);
+    return settings_rights_main(viewing_player, false);
+  }
+
+  if (is_delete) {
+    if (selected_player) {
+      const confirm_form = new MessageFormData()
+        .title("Online player information")
+        .body(`Are you sure you want to remove ${selected_player.name}'s save data?\nThey must disconnect from the world!`)
+        .button2("")
+        .button1("§cKick & Delete");
+
+      confirm_form.show(viewing_player).then(confirm => {
+        if (confirm.selection == undefined ) {
+          return -1
+        }
+        if (confirm.selection === 0) {
+          if (!world.getDimension("overworld").runCommand(`kick ${selected_player.name}`).successCount) {
+            const host_form = new MessageFormData()
+              .title("Host player information")
+              .body(`${selected_player.name} is the host. To delete their data, the server must shut down. This usually takes 5 seconds`)
+              .button2("")
+              .button1("§cShutdown & Delete");
+
+            host_form.show(viewing_player).then(host => {
+              if (host.selection == undefined ) {
+                return -1
+              }
+              if (host.selection === 0) {
+                delete_player_save_data(selected_save_data);
+                return close_world();
+              } else {
+                settings_rights_manage_sd(viewing_player, selected_save_data);
+              }
+            });
+          } else {
+            delete_player_save_data(selected_save_data);
+            settings_rights_main(viewing_player, false);
+          }
+        } else {
+          settings_rights_manage_sd(viewing_player, selected_save_data);
+        }
+      });
+
+    } else {
+      delete_player_save_data(selected_save_data);
+      settings_rights_main(viewing_player, false);
+    }
+  }
+}
+
+
 
 /*------------------------
  time_zone
@@ -7496,15 +8081,18 @@ function settings_time_zone_preview (player, zone, switch_to_auto, viewing_mode)
  Gestures
 -------------------------*/
 
-function settings_shortcuts(player) {
+function settings_shortcuts(viewing_player, input_sd_index) {
   const form = new ActionFormData();
+
   const save_data = load_save_data();
-  const player_sd_index = save_data.findIndex(e => e.id === player.id);
+  const player_sd_index = input_sd_index !== undefined ? input_sd_index : save_data.findIndex(e => e.id === viewing_player.id);
+  let is_admin_mode = input_sd_index !== undefined;
+
   const shortcuts = save_data[player_sd_index].gesture;
   let actions = [];
 
 
-  form.title("Shortcuts");
+  form.title("Shortcuts" + (is_admin_mode? " - "+ save_data[player_sd_index].name : ""));
   form.body("Commands")
 
   // Quick run
@@ -7516,7 +8104,7 @@ function settings_shortcuts(player) {
       save_data[player_sd_index].quick_run = false;
     }
     update_save_data(save_data);
-    settings_shortcuts(player);
+    settings_shortcuts(viewing_player, player_sd_index);
   });
   form.divider()
 
@@ -7532,7 +8120,7 @@ function settings_shortcuts(player) {
       actions.push(() => {
         shortcuts[command] = !shortcuts[command];
         update_save_data(save_data);
-        settings_shortcuts(player);
+        settings_shortcuts(viewing_player, player_sd_index);
       });
     });
   }
@@ -7540,10 +8128,10 @@ function settings_shortcuts(player) {
   form.divider()
   form.button("");
   actions.push(() => {
-    settings_main(player);
+    settings_main(viewing_player);
   });
 
-  form.show(player).then(response => {
+  form.show(viewing_player).then(response => {
     if (response.selection === undefined) {
       return -1
     }
@@ -7829,19 +8417,6 @@ function dictionary_contact(player) {
     form.label(`${entry.name}\n${entry.link}`);
   }
 
-  if (player.playerPermissionLevel === 2) {
-    form.button("Dump SD" + (version_info.release_type !== 2? "\nvia. privat chat" : ""));
-    actions.push(() => {
-      player.sendMessage("§l§7[§f"+ ("System") + "§7]§r SD Dump:\n"+JSON.stringify(save_data))
-    });
-
-    if (version_info.release_type !== 2) {
-      form.button("Dump SD\nvia. server console");
-      actions.push(() => {
-        print(JSON.stringify(save_data))
-      });
-    }
-  }
   form.divider()
   form.button("");
   actions.push(() => {
@@ -7863,62 +8438,14 @@ function dictionary_contact(player) {
  Debug
 -------------------------*/
 
-function debug_storage() {
-    const MAX = 32767;
-
-    // ---------- Hilfsfunktion: automatische Einheit ----------
-    function formatBytes(bytes) {
-        if (bytes < 1024) return `${bytes} Bytes`;
-        if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(2)} KB`;
-        if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(2)} MB`;
-        return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-    }
-
-    // ---------- Save-System ----------
-    const saveSize = world.getDynamicPropertyTotalByteCount();
-
-    let chunkCount = 0;
-    let maxChunkSize = 0;
-
-    while (true) {
-      const part = world.getDynamicProperty(`${BASE_KEY}_${chunkCount}`);
-      if (part === undefined || part === null) break;
-      const size = part.length;
-      if (size > maxChunkSize) maxChunkSize = size;
-      chunkCount++;
-    }
-
-    // ---------- Chunk-Auslastung ----------
-    let lastChunk = world.getDynamicProperty(`${BASE_KEY}_${chunkCount - 1}`) || "";
-
-    const used = lastChunk.length;
-    const free = Math.max(0, MAX - used);
-    const percent = Math.floor((used / MAX) * 100);
-
-    let status = "§aOK";
-    if (percent >= 90) status = "§cCRITICAL";
-    else if (percent >= 75) status = "§6HIGH";
-    else if (percent >= 50) status = "§eMEDIUM";
-
-    // ---------- Ausgabe ----------
-    return (
-        `§lChunk ${chunkCount}§r§f\n` +
-        `Used: ${formatBytes(used)} / ${formatBytes(MAX)} (${percent} Percent)\n` +
-        `Free: ${formatBytes(free)}\n` +
-        `Status: ${status}§r\n\n` +
-        `§lSave-System§r§f\n` +
-        `Chunks: ${chunkCount}\n` +
-        `DynamicProperty Size: ${formatBytes(saveSize)}`
-    );
-}
-
 function debug_main(player) {
   let form = new ActionFormData()
   let actions = []
   let save_data = load_save_data()
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  form.body(debug_storage());
+  form.title("Debug menu");
+  form.body("This is for testing purposes only!");
 
 
   form.button("§e\"save_data\" Editor");
@@ -8231,9 +8758,6 @@ function settings_rights_main(player) {
   let form = new ActionFormData();
   let save_data = load_save_data();
 
-  form.title("Permissions");
-  form.body("Select a player!");
-
   const players = world.getAllPlayers();
   const playerMap = new Map(players.map(p => [p.id, p])); // Schnelle Lookup-Map
 
@@ -8269,21 +8793,33 @@ function settings_rights_main(player) {
     return b.last_unix - a.last_unix;
   });
 
+  form.title("Permissions");
+  form.body("Online players");
 
   newList.forEach(entry => {
     const isOnline = playerMap.has(entry.id);
     let displayName = entry.name;
 
     if (isOnline) {
-      displayName += "\n§a(online)§r";
+      displayName += "\n§a(for " + getRelativeTime(Math.floor(Date.now() / 1000) - entry.last_unix) + ")§r";
       const onlineplayer = playerMap.get(entry.id);
       if (onlineplayer?.playerPermissionLevel === 2) {
         form.button(displayName, "textures/ui/op");
       } else {
         form.button(displayName, "textures/ui/permissions_member_star");
       }
-    } else {
-      displayName += "\n§o(last seen " + getRelativeTime(now - entry.last_unix) + " ago)§r";
+    }
+  });
+
+  form.divider();
+  form.label("Offline players");
+
+  newList.forEach(entry => {
+    const isOnline = playerMap.has(entry.id);
+    let displayName = entry.name;
+
+    if (!isOnline) {
+      displayName += "\n§o(since " + getRelativeTime(now - entry.last_unix) + ")§r";
       form.button(displayName, "textures/ui/lan_icon");
     }
   });
@@ -8297,367 +8833,87 @@ function settings_rights_main(player) {
     if (response.selection === newList.length) {
       return settings_main(player);
     } else {
-      return settings_rights_data(player, newList[response.selection]);
+      return settings_main(player, response.selection+1);
     }
   });
 }
 
-function settings_rights_data(viewing_player, selected_save_data) {
+// New "About player" page with detailed information
+function settings_rights_data(viewing_player, input_sd_index) {
+  let save_data = load_save_data();
+  let selected_save_data = save_data[input_sd_index];
   let selected_player = world.getAllPlayers().find(player => player.id == selected_save_data.id);
+
   let form = new ActionFormData();
+  form.title(selected_save_data.name + "'s profile");
 
-  let body_text = "";
-
-  body_text += "Name: " + selected_save_data.name + " (id: " + selected_save_data.id + ")\n";
+  // === GENERAL ===
+  form.body("§lGeneral");
+  form.label(
+    "Name: " + selected_save_data.name + "\n" +
+    "ID: " + selected_save_data.id
+  );
 
   if (selected_player) {
-      if (version_info.release_type == 0) {
-          let memory_text = "";
-          switch (selected_player.clientSystemInfo.memoryTier) {
-              case 0:
-                  memory_text = "Client Total Memory: Under 1.5 GB (Super Low)";
-                  break;
-              case 1:
-                  memory_text = "Client Total Memory: 1.5 - 2.0 GB (Low)";
-                  break;
-              case 2:
-                  memory_text = "Client Total Memory: 2.0 - 4.0 GB (Mid)";
-                  break;
-              case 3:
-                  memory_text = "Client Total Memory: 4.0 - 8.0 GB (High)";
-                  break;
-              case 4:
-                  memory_text = "Client Total Memory: Over 8.0 GB (Super High)";
-                  break;
-          }
-
-          let input_text = "";
-          switch (selected_player.inputInfo.lastInputModeUsed) {
-              case "Gamepad":
-                  input_text = "Input: Gamepad";
-                  break;
-              case "KeyboardAndMouse":
-                  input_text = "Input: Mouse & Keyboard";
-                  break;
-              case "MotionController":
-                  input_text = "Input: Motion controller";
-                  break;
-              case "Touch":
-                  input_text = "Input: Touch";
-                  break;
-          }
-
-          body_text += "Online: yes §7(for " + getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) + ")§r\n";
-          body_text += "Permission level: "+ selected_player.playerPermissionLevel +"\n";
-          body_text += "Platform: " + selected_player.clientSystemInfo.platformType + "\n";
-          body_text += "Graphics mode: " + selected_player.graphicsMode + "\n";
-          body_text += memory_text + "\n";
-          body_text += input_text + "\n";
-
-      } else {
-          body_text += "Online: yes §7(for " + getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) + ")§r\n";
-      }
-
+    form.label(
+      "Online: §ayes §7(for " +
+      getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) +
+      ")§r\n" +
+      "Permission level: " + selected_player.playerPermissionLevel
+    );
   } else {
-      body_text += "Online: no §7(last seen " + getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) + " ago)§r\n";
+    form.label(
+      "Online: §cno §7(last seen " +
+      getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) +
+      " ago)§r"
+    );
   }
 
+  // === CLIENT ===
+  if (selected_player) {
 
-  let actions = [];
-  form.body(body_text);
-
-  if (selected_save_data.id !== viewing_player.id) {
-    form.title("Edit "+ selected_save_data.name +"'s permission");
-
-    if (selected_player) {
-      if (selected_player.playerPermissionLevel === 2) {
-        form.label("§7This player is currently op! To change that open Minecraft's player Permission page.§r\n");
-
-        /* Minecraft Bug: Op command doesn't via scripts
-        form.button("§cMake deop");
-        actions.push(() => {
-          let player_sd_index = save_data.findIndex(entry => entry.id === selected_save_data.id)
-          viewing_player.runCommand(`deop ${selected_save_data.name}`);
-          update_save_data(save_data);
-          return settings_rights_data(viewing_player, save_data[player_sd_index])
-        });
-        */
-      } else {
-        form.label("§7This player is currently not op! To change that open Minecraft's player Permission page.§r\n");
-
-        form.button("Manage commands", "textures/ui/chat_send");
-        actions.push(() => {
-          settings_rights_manage_command(viewing_player, selected_save_data);
-        });
-
-        /* Minecraft Bug: Op command doesn't via scripts
-        form.button("§aMake op");
-        actions.push(() => {
-          form = new MessageFormData();
-          form.title("Op advantages");
-          form.body("Your are trying to add op advantages to "+selected_save_data.name+". With them he would be able to:\n\n- Run all kinds off command\n- Mange save data\n\nAre you sure you want to add them?\n ");
-          form.button2("");
-          form.button1("§aMake op");
-          form.show(viewing_player).then((response) => {
-            if (response.selection == undefined ) {
-              return -1
-            }
-            if (response.selection == 0) {
-              let player_sd_index = save_data.findIndex(entry => entry.id === selected_save_data.id)
-              viewing_player.runCommand(`op ${selected_save_data.name}`);
-              selected_save_data = save_data[player_sd_index]
-              update_save_data(save_data);
-            }
-
-            return settings_rights_data(viewing_player, selected_save_data)
-          });
-        });
-        */
-      }
-    } else {
-      body_text += "\n";
+    let memory_text = "";
+    switch (selected_player.clientSystemInfo.memoryTier) {
+      case 0: memory_text = "Under 1.5 GB"; break;
+      case 1: memory_text = "1.5 - 2.0 GB"; break;
+      case 2: memory_text = "2.0 - 4.0 GB"; break;
+      case 3: memory_text = "4.0 - 8.0 GB"; break;
+      case 4: memory_text = "Over 8.0 GB"; break;
     }
-  } else {
-    form.title("Edit your permission");
-    form.label("\n");
+
+    let input_text = "";
+    switch (selected_player.inputInfo.lastInputModeUsed) {
+      case "Gamepad": input_text = "Gamepad"; break;
+      case "KeyboardAndMouse": input_text = "Mouse & Keyboard"; break;
+      case "MotionController": input_text = "Motion controller"; break;
+      case "Touch": input_text = "Touch"; break;
+    }
+
+    form.label("§lClient");
+    form.label(
+      "Platform: " + selected_player.clientSystemInfo.platformType + "\n" +
+      "Graphics: " + selected_player.graphicsMode + "\n" +
+      "Memory: " + memory_text + "\n" +
+      "Maximum render distance: " + selected_player.clientSystemInfo.maxRenderDistance + "\n" +
+      "Input: " + input_text
+    );
   }
 
+  // === BUTTONS ===
+  let actions = [];
 
-
-  form.button("Manage save data", "textures/ui/storageIconColor");
-  actions.push(() => {
-    settings_rights_manage_sd(viewing_player, selected_save_data);
-  });
-
-  form.divider()
+  form.divider();
   form.button("");
   actions.push(() => {
-    settings_rights_main(viewing_player, false);
+    settings_main(viewing_player, input_sd_index);
   });
 
   form.show(viewing_player).then((response) => {
-    if (response.selection == undefined ) {
-      return -1
-    }
+    if (response.selection == undefined) return -1;
     if (actions[response.selection]) {
       actions[response.selection]();
     }
   });
-}
-
-function settings_rights_manage_command(viewing_player, selected_save_data) {
-  let form = new ActionFormData()
-  let actions = [];
-
-  const cmdList = Array.isArray(command_list) ? command_list : [];
-  const allowedIdxs = Array.isArray(selected_save_data.allowed_commands) ? selected_save_data.allowed_commands : [];
-
-  let allowedCommands = cmdList
-    .map((c, i) => ({ ...c, _index: i }))
-    .filter(item => allowedIdxs.includes(item._index));
-
-  let restrictedCommands = cmdList
-    .map((c, i) => ({ ...c, _index: i }))
-    .filter(item => !allowedIdxs.includes(item._index));
-
-  // Alphabetisch nach name sortieren
-  allowedCommands.sort((a, b) => a.name.localeCompare(b.name));
-  restrictedCommands.sort((a, b) => a.name.localeCompare(b.name));
-
-  // =========================
-  // Allowed commands
-  // =========================
-  let hasAllowed = false;
-  if (allowedCommands.length > 0) {
-    hasAllowed = true;
-
-    form.body(`§aAllowed commands (${allowedCommands.length}):`)
-        .divider();
-
-    allowedCommands.forEach((cmdObj) => {
-      form.button(`/${cmdObj.name}`);
-
-      actions.push(() => {
-        const sd = load_save_data();
-        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
-        if (saveIndex === -1) return;
-
-        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
-          ? sd[saveIndex].allowed_commands.slice()
-          : [];
-
-        const cmdIdx = cmdObj._index;
-        const pos = sd[saveIndex].allowed_commands.indexOf(cmdIdx);
-        if (pos !== -1) {
-          sd[saveIndex].allowed_commands.splice(pos, 1);
-        }
-
-        update_save_data(sd);
-        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
-        return settings_rights_manage_command(viewing_player, selected_save_data);
-      });
-    });
-
-    form.divider();
-  }
-
-  // =========================
-  // Restricted commands
-  // =========================
-  if (restrictedCommands.length > 0) {
-    if (hasAllowed) {
-      // Already used body, so use label here
-      form.label(`§cRestricted commands (${restrictedCommands.length}):`)
-          .divider();
-    } else {
-      // No allowed commands shown, so restricted gets the body
-      form.body(`§cRestricted commands (${restrictedCommands.length}):`)
-          .divider();
-    }
-
-    restrictedCommands.forEach((cmdObj) => {
-      form.button(`/${cmdObj.name}`);
-
-      actions.push(() => {
-        const sd = load_save_data();
-        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
-        if (saveIndex === -1) return;
-
-        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
-          ? sd[saveIndex].allowed_commands.slice()
-          : [];
-
-        const cmdIdx = cmdObj._index;
-        if (!sd[saveIndex].allowed_commands.includes(cmdIdx)) {
-          sd[saveIndex].allowed_commands.push(cmdIdx);
-        }
-
-        update_save_data(sd);
-        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
-        return settings_rights_manage_command(viewing_player, selected_save_data);
-      });
-    });
-
-    form.divider();
-  }
-
-  // =========================
-  // Back button
-  // =========================
-  form.button("");
-  actions.push(() => {
-    settings_rights_data(viewing_player, selected_save_data);
-  });
-
-  // Formular anzeigen und Auswahl ausführen
-  form.show(viewing_player).then(response => {
-    if (response.selection == undefined ) {
-      return -1
-    }
-    const action = actions[response.selection];
-    if (action) action();
-  });
-}
-
-function settings_rights_manage_sd(viewing_player, selected_save_data) {
-  let save_data = load_save_data()
-  const actions = [];
-  const form = new ActionFormData()
-    .title(`${selected_save_data.name}'s save data`)
-    .body("Select an option!")
-
-
-  form.button("§dReset save data")
-  actions.push(() => {
-    handle_data_action(true, false, viewing_player, selected_save_data);
-  });
-
-  form.button("§cDelete save data");
-  actions.push(() => {
-    handle_data_action(false, true, viewing_player, selected_save_data);
-  });
-
-
-  if (version_info.release_type == 0) {
-    form.divider()
-    form.button("§eOpen in SD Editor");
-    actions.push(() => {
-      debug_sd_editor(
-        viewing_player,
-        () => debug_sd_editor(viewing_player, () => debug_main(viewing_player), []),
-        [save_data.findIndex(entry => entry.id === selected_save_data.id)]
-      );
-    });
-  }
-
-  form.divider()
-  form.button("");
-  actions.push(() => {
-    settings_rights_data(viewing_player, selected_save_data);
-  });
-
-  form.show(viewing_player).then(response => {
-    if (response.selection == undefined ) {
-      return -1
-    }
-    const action = actions[response.selection];
-    if (action) action();
-  });
-}
-
-function handle_data_action(is_reset, is_delete, viewing_player, selected_save_data) {
-  const selected_player = world.getAllPlayers().find(p => p.id === selected_save_data.id);
-  if (is_reset) {
-    delete_player_save_data(selected_save_data);
-    create_player_save_data(selected_save_data.id, selected_save_data.name);
-    return settings_rights_main(viewing_player, false);
-  }
-
-  if (is_delete) {
-    if (selected_player) {
-      const confirm_form = new MessageFormData()
-        .title("Online player information")
-        .body(`Are you sure you want to remove ${selected_player.name}'s save data?\nThey must disconnect from the world!`)
-        .button2("")
-        .button1("§cKick & Delete");
-
-      confirm_form.show(viewing_player).then(confirm => {
-        if (confirm.selection == undefined ) {
-          return -1
-        }
-        if (confirm.selection === 0) {
-          if (!world.getDimension("overworld").runCommand(`kick ${selected_player.name}`).successCount) {
-            const host_form = new MessageFormData()
-              .title("Host player information")
-              .body(`${selected_player.name} is the host. To delete their data, the server must shut down. This usually takes 5 seconds`)
-              .button2("")
-              .button1("§cShutdown & Delete");
-
-            host_form.show(viewing_player).then(host => {
-              if (host.selection == undefined ) {
-                return -1
-              }
-              if (host.selection === 0) {
-                delete_player_save_data(selected_save_data);
-                return close_world();
-              } else {
-                settings_rights_manage_sd(viewing_player, selected_save_data);
-              }
-            });
-          } else {
-            delete_player_save_data(selected_save_data);
-            settings_rights_main(viewing_player, false);
-          }
-        } else {
-          settings_rights_manage_sd(viewing_player, selected_save_data);
-        }
-      });
-
-    } else {
-      delete_player_save_data(selected_save_data);
-      settings_rights_main(viewing_player, false);
-    }
-  }
 }
 
 
@@ -8666,7 +8922,7 @@ function handle_data_action(is_reset, is_delete, viewing_player, selected_save_d
 -------------------------*/
 
 function close_world() {
-  world.sendMessage("Closing World! Auto Save is disabled! Please wait...");
+  world.sendMessage("§l§7[§fSystem§7]§r Closing World! Auto Save is disabled! Please wait...");
   while (true) {}
 }
 

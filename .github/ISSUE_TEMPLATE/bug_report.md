@@ -33,6 +33,14 @@ If you put the addon on a server you will lose your privileges
 <!-- SD stands for Save Data and helps identify the problem faster.
 To create a dump:
 
+On Version 7.0.0 and above:
+1. Make sure you have Admin privileges
+2. Open the menu
+3. Navigate to Settings
+4. Click on "Storage"
+5. Dump the SD data (Storage)
+
+On Version 6.0.1 and below:
 1. Make sure you have Admin privileges
 2. Open the menu
 3. Navigate to Settings

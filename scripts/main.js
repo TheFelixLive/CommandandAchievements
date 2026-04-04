@@ -5,9 +5,9 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B042",
+  build: "B043",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1775255846,
+  unix: 1775306442,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
@@ -45,6 +45,7 @@ const version_info = {
       "Custom commands executed by other entities contains a failed message",
       "Fixed missing title in the allowed commands menu",
       "Fixed BlockTypes, EntityTypes & ItemTypes not working properly in custom command",
+      "Fixed Online time of players not updating properly in the permission menu",
     ]
 
   }
@@ -3488,11 +3489,44 @@ world.afterEvents.playerJoin.subscribe(({ playerId, playerName }) => {
   create_player_save_data(playerId, playerName);
 })
 
+// Player leave (Online Time Tracking)
+world.beforeEvents.playerLeave.subscribe(({ player }) => {
+  print(`player ${player.name} (${player.id}) left!`)
+  let save_data = load_save_data();
+  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+  if (!player_sd_index === -1) {
+    save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
+    update_save_data(save_data);
+  }
+})
+
+// Server shutdown (Online Time Tracking)
+system.beforeEvents.shutdown.subscribe(() => {
+  print("Server is shutting down, updating online players' save data...");
+  world.getAllPlayers().forEach(player => {
+    let save_data = load_save_data();
+    let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+    print(`Updating save data for player ${player.name} (${player.id}) before shutdown...`);
+
+    if (!player_sd_index === -1) {
+      save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
+      update_save_data(save_data);
+    }
+  })
+})
+
 world.afterEvents.playerSpawn.subscribe(async (eventData) => {
   const { player, initialSpawn } = eventData;
   if (!initialSpawn) return -1
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+
+  // Player Join (Online Time Tracking)
+  print(`player ${player.name} (${player.id}) spawned!`)
+  save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
+  update_save_data(save_data);
 
   await system.waitTicks(40); // Wait for the player to be fully joined
 
@@ -3663,7 +3697,7 @@ function formatBytes(bytes) {
     return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
 }
 
-function getBytesfromSDindex(sdEntry) {
+function getBytesfromInput(sdEntry) {
     if (!sdEntry) return { bytes: 0, chunks: [] };
 
     const json = JSON.stringify(sdEntry);
@@ -3912,9 +3946,6 @@ function generate_command_lists(player) {
     entries: []
   }));
 
-  let save_data = load_save_data();
-  const player_sd_index = save_data.findIndex(e => e.id === player.id);
-
   function addTo(arr, label, icon, actionFn) {
     arr.push({ label, icon, actionFn });
   }
@@ -3923,6 +3954,8 @@ function generate_command_lists(player) {
     let visible = true;
     visible = isCommandAvailable(player, `/${cmd.name}`);
 
+    if (!visible) continue;
+
     if (typeof cmd.visible === "function") {
       visible = !!cmd.visible(player);
     } else if (typeof cmd.visible === "boolean") {
@@ -3930,8 +3963,6 @@ function generate_command_lists(player) {
     }
 
     let isVC = isVisualCommandAvailable(player, cmd)
-
-    if (!visible) continue;
 
     // recommended Flag ermitteln
     let recommendedFlag = false;
@@ -4054,8 +4085,10 @@ function generate_history_entries(player) {
 
 function canPlayerUseMenu(player, player_sd_index) {
   const save_data = load_save_data();
+  if (player.playerPermissionLevel === 2 && (player_sd_index == save_data.findIndex(e => e.id === player.id))) return true; // Admins immer Zugriff
+
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
-  if (player.playerPermissionLevel === 2) return true; // Admins immer Zugriff
+
   return save_data[player_sd_index].allow_menu;
 }
 
@@ -5552,7 +5585,7 @@ function command_menu(player, command, history_index) {
     form.label(history_data.successful ? "§2Command executed successfully§r" : "§cCommand failed to execute§r");
     form.label(save_data[0].utc === undefined ? "§7§oTime: " + getRelativeTime(Math.floor(Date.now() / 1000) - history_data.unix, player) + " ago" : "§7§oDate: " + `${build_date.day}.${build_date.month}.${build_date.year}`);
     form.toggle((version_info.release_type == 0? "Hide from history" : "Delete from history"), {tooltip: "If enabled, this command will be removed from your history after submitting the form."});
-  } else if (canPlayerUseMenu(player)) {
+  } else if (canPlayerUseChains(player)) {
     form.toggle("Pin to Main Menu", {tooltip: "If enabled, this command will be added to your main menu for quick access."});
   }
 
@@ -6327,6 +6360,7 @@ function visual_command(player) {
   if (categoryLists.length > 0) {
     form.label("Categories");
     for (const cat of categoryLists) {
+      if (cat.entries.length === 0) continue;
       const label = `${cat.category.name}\n§o${cat.category.description}§r`;
       form.button(label, cat.category.icon);
       actions.push(() => visual_command_overview(player, cat.entries));
@@ -7386,7 +7420,7 @@ function settings_main(viewing_player, input_sd_index) {
   // Storage
   if (viewing_player.playerPermissionLevel === 2) {
     if (is_admin_mode) {
-      form.button("Storage\n§9" + formatBytes(getBytesfromSDindex(input_sd_index).bytes), "textures/ui/storageIconColor");
+      form.button("Storage\n§9" + formatBytes(getBytesfromInput(save_data[input_sd_index]).bytes), "textures/ui/storageIconColor");
       actions.push(() => {
         settings_rights_manage_sd(viewing_player, save_data[input_sd_index]);
       });
@@ -7703,8 +7737,8 @@ function settings_storage_allocation(player) {
   let storage_distribution = save_data
   .map((value, index) => {
     return {
-      bytes: getBytesfromSDindex(value).bytes,
-      chunks: getBytesfromSDindex(value).chunks,
+      bytes: getBytesfromInput(value).bytes,
+      chunks: getBytesfromInput(value).chunks,
       index: index
     };
   })
@@ -7732,7 +7766,7 @@ function settings_storage_allocation(player) {
         });
       }
       else {
-        settings_rights_manage_sd(player, save_data[entry.index]);
+        settings_rights_manage_sd(player, save_data[entry.index], true);
       }
     });
   });
@@ -7753,13 +7787,12 @@ function settings_storage_allocation(player) {
   });
 }
 
-function settings_rights_manage_sd(viewing_player, selected_save_data) {
+function settings_rights_manage_sd(viewing_player, selected_save_data, came_from_storage = false) {
   let save_data = load_save_data()
   const actions = [];
   const form = new ActionFormData()
     .title(`${selected_save_data.name}'s save data`)
     .body("Select an option!")
-  const is_different_player = viewing_player.id !== selected_save_data.id;
 
 
   form.button("§dReset save data")
@@ -7788,7 +7821,7 @@ function settings_rights_manage_sd(viewing_player, selected_save_data) {
   form.divider()
   form.button("");
   actions.push(() => {
-    is_different_player? settings_storage_allocation(viewing_player) : settings_main(viewing_player, save_data.findIndex(entry => entry.id === selected_save_data.id));
+    came_from_storage? settings_storage_allocation(viewing_player) : settings_main(viewing_player, save_data.findIndex(entry => entry.id === selected_save_data.id));
   });
 
   form.show(viewing_player).then(response => {
@@ -8104,7 +8137,7 @@ function settings_shortcuts(viewing_player, input_sd_index) {
       save_data[player_sd_index].quick_run = false;
     }
     update_save_data(save_data);
-    settings_shortcuts(viewing_player, player_sd_index);
+    settings_shortcuts(viewing_player, input_sd_index);
   });
   form.divider()
 
@@ -8120,7 +8153,7 @@ function settings_shortcuts(viewing_player, input_sd_index) {
       actions.push(() => {
         shortcuts[command] = !shortcuts[command];
         update_save_data(save_data);
-        settings_shortcuts(viewing_player, player_sd_index);
+        settings_shortcuts(viewing_player, input_sd_index);
       });
     });
   }
@@ -8128,7 +8161,7 @@ function settings_shortcuts(viewing_player, input_sd_index) {
   form.divider()
   form.button("");
   actions.push(() => {
-    settings_main(viewing_player);
+    settings_main(viewing_player, input_sd_index);
   });
 
   form.show(viewing_player).then(response => {
@@ -8759,9 +8792,13 @@ function settings_rights_main(player) {
   let save_data = load_save_data();
 
   const players = world.getAllPlayers();
-  const playerMap = new Map(players.map(p => [p.id, p])); // Schnelle Lookup-Map
+  const playerMap = new Map(players.map(p => [p.id, p]));
 
-  let newList = save_data.slice(1); // Eintrag 0 ignorieren
+  // sd_index hinzufügen (Original-Index behalten)
+  let newList = save_data.slice(1).map((entry, index) => ({
+    ...entry,
+    sd_index: index + 1 // wegen slice(1)
+  }));
 
   const now = Math.floor(Date.now() / 1000);
 
@@ -8772,17 +8809,14 @@ function settings_rights_main(player) {
     const aOp = aOnline ? playerMap.get(a.id)?.playerPermissionLevel === 2 : false;
     const bOp = bOnline ? playerMap.get(b.id)?.playerPermissionLevel === 2 : false;
 
-    const aLastSeen = now - a.last_unix;
-    const bLastSeen = now - b.last_unix;
-
     const aName = a.name.toLowerCase();
     const bName = b.name.toLowerCase();
 
-    // Online-Status priorisieren
+    // Online zuerst
     if (aOnline && !bOnline) return -1;
     if (!aOnline && bOnline) return 1;
 
-    // Beide online
+    // Beide online → OP zuerst, dann Name
     if (aOnline && bOnline) {
       if (aOp && !bOp) return -1;
       if (!aOp && bOp) return 1;
@@ -8796,24 +8830,31 @@ function settings_rights_main(player) {
   form.title("Permissions");
   form.body("Online players");
 
+  let buttonMap = [];
+
+  // Online Spieler
   newList.forEach(entry => {
     const isOnline = playerMap.has(entry.id);
     let displayName = entry.name;
 
     if (isOnline) {
-      displayName += "\n§a(for " + getRelativeTime(Math.floor(Date.now() / 1000) - entry.last_unix) + ")§r";
+      displayName += "\n§a(for " + getRelativeTime(now - entry.last_unix) + ")§r";
       const onlineplayer = playerMap.get(entry.id);
+
       if (onlineplayer?.playerPermissionLevel === 2) {
         form.button(displayName, "textures/ui/op");
       } else {
         form.button(displayName, "textures/ui/permissions_member_star");
       }
+
+      buttonMap.push(entry.sd_index);
     }
   });
 
   form.divider();
   form.label("Offline players");
 
+  // Offline Spieler
   newList.forEach(entry => {
     const isOnline = playerMap.has(entry.id);
     let displayName = entry.name;
@@ -8821,19 +8862,26 @@ function settings_rights_main(player) {
     if (!isOnline) {
       displayName += "\n§o(since " + getRelativeTime(now - entry.last_unix) + ")§r";
       form.button(displayName, "textures/ui/lan_icon");
+
+      buttonMap.push(entry.sd_index);
     }
   });
 
   form.divider();
-  form.button(""); // Zurück-Button
+
+  // Zurück Button
+  form.button("");
+  buttonMap.push("back");
 
   form.show(player).then((response) => {
     if (response.selection === undefined) return -1;
 
-    if (response.selection === newList.length) {
+    const selected = buttonMap[response.selection];
+
+    if (selected === "back") {
       return settings_main(player);
     } else {
-      return settings_main(player, response.selection+1);
+      return settings_main(player, selected);
     }
   });
 }
@@ -8923,38 +8971,13 @@ function settings_rights_data(viewing_player, input_sd_index) {
 
 function close_world() {
   world.sendMessage("§l§7[§fSystem§7]§r Closing World! Auto Save is disabled! Please wait...");
-  while (true) {}
+  while (true) {} // Infinite loop to effectively "close" the world via. the watchdog timer, which will trigger after a few seconds and stop the server. This is necessary because there is no method to programmatically stop the server.
 }
 
-async function update_loop() {
-  // Ein Objekt, um die vorherige Eintragsanzahl jedes Spielers zu speichern
-  let previous_entry_counts = {};
-
-  while (true) {
-    gesture_nod()
-    gesture_jump()
-    gesture_emote()
-
-    let save_data = load_save_data();
-
-    world.getAllPlayers().forEach(player => {
-      let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-      if (player_sd_index !== -1) {
-        let player_entry = save_data[player_sd_index];
-        let current_entry_count = player_entry.items ? player_entry.items.length : 0;
-
-        if (previous_entry_counts[player.id] !== current_entry_count) {
-          player_entry.last_unix = Math.floor(Date.now() / 1000);
-          update_save_data(save_data);
-        }
-
-        previous_entry_counts[player.id] = current_entry_count;
-      }
-    });
-
-    await system.waitTicks(1);
-  }
+function update_loop() {
+  gesture_nod();
+  gesture_jump();
+  gesture_emote();
 }
 
-system.run(() => update_loop());
+system.runInterval(() => update_loop(), 1);

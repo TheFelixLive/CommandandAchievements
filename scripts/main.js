@@ -5,9 +5,9 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B043",
+  build: "B044",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1775306442,
+  unix: 1775343018,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
@@ -21,7 +21,7 @@ const version_info = {
       "Restructured the main menu layout",
       "Restructured the Permission menu",
       "Added a new Storage menu to view and manage save data",
-      // New about page
+      "Added a dynamic log system",
       // Readd /tp, /camera & /execute command
     ],
     // general_changes
@@ -46,6 +46,7 @@ const version_info = {
       "Fixed missing title in the allowed commands menu",
       "Fixed BlockTypes, EntityTypes & ItemTypes not working properly in custom command",
       "Fixed Online time of players not updating properly in the permission menu",
+      "Fixed a bug where some help messages wouldn't appear",
     ]
 
   }
@@ -3152,13 +3153,15 @@ system.beforeEvents.startup.subscribe((init) => {
 system.run(() => {
   let save_data = load_save_data();
 
-  const default_save_data_structure = {utc: undefined, utc_auto: true};
+  const default_save_data_structure = {utc: undefined, utc_auto: true, sessions: []};
 
   if (!save_data) {
       save_data = [default_save_data_structure];
       print("Creating save_data...");
   } else {
       let data_entry = save_data[0];
+      migrate_last_unix_to_sessions(data_entry);
+
       let changes_made = false;
 
       function merge_defaults(target, defaults) {
@@ -3192,6 +3195,7 @@ system.run(() => {
       }
   }
 
+  startSession(save_data[0], Math.floor(Date.now() / 1000));
   update_save_data(save_data);
 })
 
@@ -3200,6 +3204,64 @@ const BASE_KEY = "com2hard:save_data";
 const META_KEY = BASE_KEY + "_meta";
 const MAX_BYTES = 32767;
 
+function migrate_last_unix_to_sessions(entry) {
+    if (!entry || Array.isArray(entry.sessions)) return;
+
+    const sessions = [];
+    const logins = entry.last_unix && Array.isArray(entry.last_unix.login) ? entry.last_unix.login : [];
+    const logouts = entry.last_unix && Array.isArray(entry.last_unix.logout) ? entry.last_unix.logout : [];
+    const count = Math.max(logins.length, logouts.length);
+
+    for (let i = 0; i < count; i++) {
+        const session = {};
+        if (i < logins.length) session.login = logins[i];
+        if (i < logouts.length) session.logout = logouts[i];
+        sessions.push(session);
+    }
+
+    entry.sessions = sessions;
+    delete entry.last_unix;
+}
+
+function getSessions(entry) {
+    if (!entry) return [];
+    if (Array.isArray(entry.sessions)) return entry.sessions;
+    if (entry.last_unix) {
+        migrate_last_unix_to_sessions(entry);
+        return Array.isArray(entry.sessions) ? entry.sessions : [];
+    }
+    return [];
+}
+
+function getLastSession(entry) {
+    const sessions = getSessions(entry);
+    return sessions[sessions.length - 1] || null;
+}
+
+function getLastLogin(entry) {
+    return getLastSession(entry)?.login ?? null;
+}
+
+function getLastLogout(entry) {
+    return getLastSession(entry)?.logout ?? null;
+}
+
+function startSession(entry, loginUnix) {
+    if (!entry.sessions || !Array.isArray(entry.sessions)) entry.sessions = [];
+    const last = entry.sessions[entry.sessions.length - 1];
+    if (last && last.login !== undefined && last.logout === undefined) return;
+    entry.sessions.push({login: loginUnix});
+}
+
+function endSession(entry, logoutUnix) {
+    if (!entry.sessions || !Array.isArray(entry.sessions)) entry.sessions = [];
+    const last = entry.sessions[entry.sessions.length - 1];
+    if (last && last.login !== undefined && last.logout === undefined) {
+        last.logout = logoutUnix;
+    } else {
+        entry.sessions.push({logout: logoutUnix});
+    }
+}
 
 function uint8ToBase64(u8) {
     // chunked conversion to avoid apply() argument length limits
@@ -3417,7 +3479,7 @@ function create_player_save_data(playerId, playerName) {
   const default_player_save_data_structure = () => ({
       id: playerId,
       name: playerName,
-      last_unix: Math.floor(Date.now() / 1000),
+      sessions: [],
       gesture: { emote: false, sneak: false, nod: false, stick: false },
       command_history: [],
       quick_run: false,
@@ -3429,7 +3491,7 @@ function create_player_save_data(playerId, playerName) {
   });
 
   let player_sd_index = save_data.findIndex(entry => entry.id === playerId);
-  let player_data;
+  let player_data, changes_made = false;
 
   // Helper function to recursively merge default values
   const merge_defaults = (target, defaults) => {
@@ -3458,9 +3520,11 @@ function create_player_save_data(playerId, playerName) {
 
       player_data = default_player_save_data_structure();
       save_data.push(player_data);
+      player_sd_index = save_data.length - 1; // Set index to the newly added player
   } else {
       // player exists, get their data
       player_data = save_data[player_sd_index];
+      migrate_last_unix_to_sessions(player_data);
 
       // Update player name if it's different
       if (player_data.name !== playerName) {
@@ -3470,80 +3534,86 @@ function create_player_save_data(playerId, playerName) {
       const dynamic_default_structure = default_player_save_data_structure(player_data.op);
       merge_defaults(player_data, dynamic_default_structure);
 
+      if (changes_made) {
+          print(`Missing save_data attributes for player ${playerName} (${playerId}) found and added.`);
+      }
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  startSession(save_data[player_sd_index], now);
+  if (world.getAllPlayers().find(p => p.id === playerId)) {
+    // Player is online
+    world.getAllPlayers().forEach(player => {
+      if (player.playerPermissionLevel == 2 && player.id !== playerId) {
+        player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
+        player.playSound("random.pop")
+      }
+    })
+  } else {
+    // Player is offline (e.g. dummy join for data creation)
+    endSession(save_data[player_sd_index], now);
   }
 
   update_save_data(save_data);
-  world.getAllPlayers().forEach(player => {
-    if (player.permissionLevel == 2) {
-      player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
-      player.playSound("random.pop")
-    }
-  })
 }
 
 /*------------------------
  Join Messages and reminders
 -------------------------*/
 
-world.afterEvents.playerJoin.subscribe(({ playerId, playerName }) => {
-  create_player_save_data(playerId, playerName);
-})
-
 // Player leave (Online Time Tracking)
-world.beforeEvents.playerLeave.subscribe(({ player }) => {
-  print(`player ${player.name} (${player.id}) left!`)
+world.beforeEvents.playerLeave.subscribe(async ({ player }) => {
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  if (!player_sd_index === -1) {
-    save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
+  if (player_sd_index !== -1) {
+    print(`player ${player.name} (${player.id}) left!`)
+    endSession(save_data[player_sd_index], Math.floor(Date.now() / 1000));
     update_save_data(save_data);
   }
 })
 
 // Server shutdown (Online Time Tracking)
-system.beforeEvents.shutdown.subscribe(() => {
+system.beforeEvents.shutdown.subscribe(async () => {
   print("Server is shutting down, updating online players' save data...");
-  world.getAllPlayers().forEach(player => {
-    let save_data = load_save_data();
-    let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+  const now = Math.floor(Date.now() / 1000);
 
-    print(`Updating save data for player ${player.name} (${player.id}) before shutdown...`);
+  let save_data = load_save_data();
 
-    if (!player_sd_index === -1) {
-      save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
-      update_save_data(save_data);
+  // Beende alle aktiven Sessions für alle Spieler und den Server
+  save_data.forEach((entry, index) => {
+    const sessions = getSessions(entry);
+    const lastSession = sessions[sessions.length - 1];
+    if (lastSession && lastSession.login !== undefined && lastSession.logout === undefined) {
+      print(`Ending active session for ${index === 0 ? 'Server' : entry.name} (${entry.id || 'N/A'})...`);
+      endSession(entry, now);
     }
-  })
+  });
+
+  update_save_data(save_data);
 })
 
 world.afterEvents.playerSpawn.subscribe(async (eventData) => {
   const { player, initialSpawn } = eventData;
   if (!initialSpawn) return -1
+
+  // If the player is joining for the first time, create their save data entry or update it if it already exists (e.g. due to missing attributes)
+  create_player_save_data(player.id, player.name);
+
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  // Player Join (Online Time Tracking)
-  print(`player ${player.name} (${player.id}) spawned!`)
-  save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000);
-  update_save_data(save_data);
-
   await system.waitTicks(40); // Wait for the player to be fully joined
 
-  // Help reminders
-  if (save_data[player_sd_index].last_unix == undefined || save_data[player_sd_index].last_unix > (Math.floor(Date.now() / 1000) + 604800)) {
-    player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the command §l/com2hard:menu§r§f.")
-    player.playSound("random.pop")
+  // Beta Feedback Request
+  if (version_info.release_type !== 2 && player.playerPermissionLevel === 2) {
+    player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
+  }
 
-    if (save_data[player_sd_index].last_unix == undefined) {
-      save_data[player_sd_index].last_unix = Math.floor(Date.now() / 1000)
-      update_save_data(save_data)
-    }
-  } else {
-    if (version_info.release_type !== 2 && player.playerPermissionLevel === 2) {
-      player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
-      player.playSound("random.pop")
-    }
+  // Help reminders
+  const lastPlayerSession = getLastSession(save_data[player_sd_index]);
+  if (lastPlayerSession?.login > (Math.floor(Date.now() / 1000) + 604800)) {
+    player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the command §l/com2hard:menu§r§f.")
   }
 });
 
@@ -4039,9 +4109,9 @@ function generate_history_entries(player) {
       return {
         category: "command",
         entry,
+        unix: entry.unix,
         label: `/${cmdName}\n${statusText} | ${relativeTime} ago`,
         icon: texture,
-        originalIndex,
         actionFn: () => {
           if (saveData[playerIndex].quick_run) {
             execute_command(player, entry.command, player);
@@ -4054,33 +4124,29 @@ function generate_history_entries(player) {
 
   const chainEntries = (playerIndex !== -1 && Array.isArray(saveData[playerIndex].chain_commands) && canPlayerUseChains(player))
     ? saveData[playerIndex].chain_commands
-        .map((chain, index) => ({ chain, index }))
-        .filter(({ chain }) => chain?.state?.unix != null)
-        .map(({ chain, index }) => {
-          const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
-          const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
-
-          return {
-            category: "chain",
-            entry: { ...chain, unix: chain.state.unix },
-            label: `Chain: ${chain.name || "Unnamed Chain"}\n${statusText} | ${relativeTime} ago`,
-            icon: chain.icon || "textures/items/chain",
-            originalIndex: index,
-            actionFn: () => {
-              if (chain.commands.length !== 0 && saveData[playerIndex].quick_run) {
-                execute_chain(player, index);
-              } else {
+        .flatMap((chain, index) => {
+          const unixArray = Array.isArray(chain.state.unix) ? chain.state.unix : [chain.state.unix].filter(u => u != null);
+          return unixArray.map(unix => {
+            const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
+            const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - unix);
+            return {
+              category: "chain",
+              entry: chain,
+              unix: unix,
+              label: `Chain: ${chain.name || "Unnamed Chain"}\n${statusText} | ${relativeTime} ago`,
+              icon: chain.icon || "textures/items/chain",
+              actionFn: () => {
                 chain_main(player, index);
               }
-            }
-          };
+            };
+          });
         })
     : [];
 
-  const allEntrys = [...historyEntries, ...chainEntries]
-    .sort((a, b) => b.entry.unix - a.entry.unix);
+  const allEntries = [...historyEntries, ...chainEntries]
+    .sort((a, b) => b.unix - a.unix);
 
-  return allEntrys;
+  return allEntries;
 }
 
 function canPlayerUseMenu(player, player_sd_index) {
@@ -4097,6 +4163,111 @@ function canPlayerUseChains(player, player_sd_index) {
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
   if (player.playerPermissionLevel === 2) return true; // Admins immer Zugriff
   return save_data[player_sd_index].allow_chains;
+}
+
+function pushChainUnix(chainState, timestamp) {
+  if (!chainState) return;
+  if (!Array.isArray(chainState.unix)) {
+    chainState.unix = chainState.unix != null ? [chainState.unix] : [];
+  }
+  chainState.unix.push(timestamp);
+}
+
+/*------------------------
+  Logs
+-------------------------*/
+
+function generate_logs() {
+  const logs = [];
+  const save_data = load_save_data();
+
+  // Process all player data
+  save_data.forEach((entry, index) => {
+    const playerId = entry.id;
+    const playerName = index == 0 ? "Server" : entry.name || "Unknown";
+
+    // Process command history
+    if (Array.isArray(entry.command_history)) {
+      for (const command of entry.command_history) {
+        if (command.hidden === true) continue; // Skip hidden entries
+
+        const statusColor = command.successful ? "§2" : "§c";
+        const statusText = command.successful ? "Ran" : "Failed";
+        const timeAgo = getRelativeTime(command.unix);
+
+        logs.push({
+          label: `${statusColor}${statusText}§r ${command.command}\n${playerName} | ${timeAgo}`,
+          icon: command.textures || "textures/ui/chat_send",
+          unix: command.unix,
+          actionFn: () => {
+            console.log(`Command "${command.command}" executed by ${playerName} - Status: ${command.successful ? "Success" : "Failed"}`);
+          }
+        });
+      }
+    }
+
+    // Process chain commands
+    if (Array.isArray(entry.chain_commands)) {
+      for (const chain of entry.chain_commands) {
+        const chainName = chain.name || "Unnamed Chain";
+        for (const unix of chain.state.unix) {
+          const statusColor = chain.state.successful ? "§2" : "§c";
+          const statusText = chain.state.successful ? "Ran" : "Failed";
+          const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - unix);
+
+          logs.push({
+            label: `${statusColor}${statusText}§r ${chainName}\n${playerName} | ${timeAgo}`,
+            icon: chain.state.textures || "textures/items/chain",
+            unix: unix,
+            actionFn: () => {
+              console.log(`Chain "${chainName}" executed by ${playerName} - Status: ${chain.state.successful ? "Success" : "Failed"}`);
+            }
+          });
+        }
+      }
+    }
+
+    // Process player login / logout events from sessions
+    const sessions = getSessions(entry);
+    sessions.forEach((session, i) => {
+      if (session.logout !== undefined) {
+        const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - session.logout);
+        let sessionDuration = "unknown";
+
+        if (session.login !== undefined) {
+          sessionDuration = getRelativeTime(session.logout - session.login);
+        }
+
+        logs.push({
+          label: index === 0
+            ? `§cShutdown§r after ${sessionDuration}§r\n${playerName} | ${timeAgo}`
+            : `§cLeft§r after ${sessionDuration}§r\n${playerName} | ${timeAgo}`,
+          icon: "textures/ui/Ping_Offline_Red",
+          unix: session.logout,
+          actionFn: () => {
+            console.log(`${playerName} left the server`);
+          }
+        });
+      }
+
+      if (session.login !== undefined) {
+        const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - session.login);
+
+        logs.push({
+          label: index === 0
+            ? `§2Started§r the Server ${i + 1}. time(s)§r\n${playerName} | ${timeAgo}`
+            : `§2Joined§r the Server ${i + 1}. time(s)§r\n${playerName} | ${timeAgo}`,
+          icon: index === 0 ? "textures/ui/servers" : "textures/ui/online",
+          unix: session.login,
+        });
+      }
+    });
+  });
+
+  // Sort logs by unix timestamp (newest first)
+  logs.sort((a, b) => b.unix - a.unix);
+
+  return logs;
 }
 
 /*------------------------
@@ -4277,9 +4448,8 @@ function isRideableEntityNearby(player, radius) {
     });
 
     for (const entity of entities) {
-      if (entity.id === player.id) continue; // Sich selbst überspringen
+      if (entity.id === player.id) continue; // Not sure why the player itself has an "minecraft:rideable" component...
 
-      // Prüft, ob das Entity das Rideable-Component besitzt
       if (entity.hasComponent("minecraft:rideable")) {
           return true;
       }
@@ -4792,7 +4962,7 @@ function getRelativeTime(diff) {
   if (minutes > 0) {
     return `${minutes} minute${minutes > 1 ? 's' : ''}`;
   }
-  return `a few seconds`;
+  return `a few seconds`
 }
 
 function convertUnixToDate(unixSeconds, utcOffset) {
@@ -5232,7 +5402,7 @@ function main_menu(player) {
 
   const recommendVisible = (recommendedEntries.length > 0 && save_data[player_sd_index].recommendations);
   const pinedChains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).length > 0;
-  const hasHistory = save_data[player_sd_index].command_history.some(entry => !entry.hidden);
+  const historyPreview = generate_history_entries(player);
 
 
   /*------------------------
@@ -5279,7 +5449,8 @@ function main_menu(player) {
 
         const cmdName = chain.name || "Unnamed Chain";
         const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-        const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+        const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
+        const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
 
         form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
@@ -5299,22 +5470,25 @@ function main_menu(player) {
     }
 
     // History panel
-    if (!recommendVisible && hasHistory && !pinedChains) {
+    if (!recommendVisible && historyPreview.length > 0 && !pinedChains) {
       form.divider();
       form.label("History");
 
-      const historyButtons = generate_history_entries(player);
-      const previewHistory = historyButtons.slice(0, historyButtons.length > 3 ? 2 : 3);
+      const previewHistory = historyPreview.slice(0, historyPreview.length > 3 ? 2 : 3);
 
       previewHistory.forEach((buttonEntry) => {
         form.button(buttonEntry.label, buttonEntry.icon);
         actions.push(buttonEntry.actionFn);
       });
 
-      if (historyButtons.length > 3) {
+      if (historyPreview.length > 3) {
         form.button("Show more!");
         actions.push(() => {
-          command_history_menu(player);
+          multipage_time_menu(
+            player,
+            generate_history_entries(player),
+            canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+          );
         });
       }
     }
@@ -5349,10 +5523,14 @@ function main_menu(player) {
   form.divider()
   form.label("Other");
 
-  if (hasHistory && (recommendVisible || pinedChains)) {
+  if (historyPreview.length > 0 && (recommendVisible || pinedChains)) {
     form.button("History", "textures/ui/icon_book_writable");
     actions.push(() => {
-      command_history_menu(player);
+      multipage_time_menu(
+        player,
+        generate_history_entries(player),
+        canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+      );
     });
   }
 
@@ -5385,180 +5563,6 @@ function main_menu(player) {
 /*------------------------
  Enter Command
 -------------------------*/
-
-function command_history_menu(player) {
-  const save_data = load_save_data();
-  const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  const historyButtons = generate_history_entries(player);
-
-  const now = Math.floor(Date.now() / 1000);
-  const utcSet = Boolean(save_data[0]?.utc);
-  const utcOffsetMinutes = utcSet ? Math.round((save_data[0].utc || 0) * 60) : 0; // default 0 wenn nicht gesetzt
-
-  // Lokalzeit / Mitternacht-Grenzen (wenn utc nicht gesetzt, verwenden wir einfach lokale timestamps ohne Offset-Anpassung)
-  const nowLocal = new Date((now + utcOffsetMinutes * 60) * 1000);
-  const midLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate());
-  const todayMid = Math.floor(midLocal.getTime() / 1000);
-  const yestMid = todayMid - 24 * 3600;
-  const week7Mid = todayMid - 7 * 24 * 3600;
-
-  // English month names
-  const monthNames = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December"
-  ];
-
-  // determineGroupLabel akzeptiert jetzt, ob utc gesetzt ist (utcSet).
-  // Falls utc nicht gesetzt ist, liefern wir eine neutrale Gruppe ohne Label.
-  function determineGroupLabel(entryUnix) {
-    if (!utcSet) {
-      // Wenn keine UTC-Einstellung vorhanden: keine zeit-basierten Kategorien anzeigen.
-      // Wir geben eine neutrale Gruppe zurück, damit Zählungen/Logik weiterhin funktionieren,
-      // aber das Label bleibt leer und wird nicht angezeigt.
-      return { group: "ungrouped", label: "" };
-    }
-
-    const diffSec = now - entryUnix;
-    const localUnix = entryUnix + utcOffsetMinutes * 60;
-    const date = new Date(localUnix * 1000);
-
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const hour = date.getHours();
-    const minute = date.getMinutes();
-
-    let group, label;
-    if (diffSec < 3600) {
-      label = `${hour}:${String(minute).padStart(2,'0')} o'clock`;
-      group = `minute-${hour}-${minute}`;
-    } else if (diffSec < 4 * 3600 && localUnix >= todayMid) {
-      label = `${hour} o'clock`;
-      group = `hour-${hour}`;
-    } else if (localUnix >= todayMid && hour < 4) {
-      label = "Today Night";       group = "today-night";
-    } else if (localUnix >= todayMid && hour < 12) {
-      label = "Today Morning";     group = "today-morning";
-    } else if (localUnix >= todayMid && hour < 16) {
-      label = "Today Noon";        group = "today-noon";
-    } else if (localUnix >= todayMid && hour < 20) {
-      label = "Today Afternoon";   group = "today-afternoon";
-    } else if (localUnix >= todayMid) {
-      label = "Today Evening";     group = "today-evening";
-    } else if (localUnix >= yestMid) {
-      label = "Yesterday";         group = "yesterday";
-    } else if (localUnix >= week7Mid) {
-      label = "Last days";         group = "last-days";
-    } else if (diffSec < 14 * 24 * 3600) {
-      label = "Last week";         group = "last-week";
-    } else if (year === nowLocal.getFullYear()) {
-      label = monthNames[month];   group = `month-${month}`;
-    } else {
-      label = String(year);        group = `year-${year}`;
-    }
-
-    return { group, label };
-  }
-
-  // 1. Durchlauf: Zähle Einträge pro Gruppe (wird später pro Seite genutzt)
-  const groupCounts = {};
-  historyButtons.forEach(buttonEntry => {
-    const { group } = determineGroupLabel(buttonEntry.entry.unix);
-    groupCounts[group] = (groupCounts[group] || 0) + 1;
-  });
-
-  const pages = [];
-  let currentPage = [];
-
-  for (let i = 0; i < historyButtons.length; i++) {
-    currentPage.push(historyButtons[i]);
-
-    if (currentPage.length >= 20) {
-      // move last 5 entries into a new page
-      const moved = currentPage.splice(currentPage.length - 5, 5);
-      // push a copy of the current (trimmed) page
-      pages.push([...currentPage]);
-      // start new currentPage with moved entries
-      currentPage = [...moved];
-    }
-  }
-  // push remaining
-  if (currentPage.length > 0) pages.push([...currentPage]);
-
-  // Funktion, die eine bestimmte Seite anzeigt
-  function showPage(pageIndex) {
-    const page = pages[pageIndex];
-
-    // frisches Form für jede Seite
-    let f = new ActionFormData();
-    f.title("Command History" + (pages.length >= 2 ? " Page " + (pageIndex + 1) + "/" + pages.length : ""));
-    f.body("Select a command!");
-    const pageActions = [];
-
-    if (!utcSet && historyButtons.length > 9 && player.playerPermissionLevel === 2 && pageIndex === 0) {
-      f.label("§7Confusing? Enter your time zone!");
-      f.button("Time zone", "textures/ui/world_glyph_color_2x");
-      pageActions.push(() => settings_time_zone(player, 0));
-      f.divider();
-    }
-
-
-    // gleiche Gruppierungslogik wie vorher, aber nur für diese Seite
-    let lastGroup = null;
-    page.forEach(buttonEntry => {
-
-      const diffSec = now - buttonEntry.entry.unix;
-      const { group, label: baseLabel } = determineGroupLabel(buttonEntry.entry.unix);
-
-      // Labels nur anzeigen, wenn utc gesetzt ist UND es ein nicht-leeres Label gibt
-      if (group !== lastGroup && utcSet && baseLabel) {
-        let labelToShow = baseLabel;
-        const count = groupCounts[group] || 0;
-        if (count >= 3) {
-          labelToShow = `${baseLabel} (${count})`;
-        }
-        f.label(labelToShow);
-        lastGroup = group;
-      }
-
-      f.button(buttonEntry.label, buttonEntry.icon);
-      pageActions.push(buttonEntry.actionFn);
-    });
-
-    f.divider();
-
-    // Navigation buttons
-    if (pageIndex > 0) {
-      f.button("Prev");
-      pageActions.push(() => showPage(pageIndex - 1));
-    }
-
-    if (pageIndex < pages.length - 1) {
-      f.button("Next");
-      pageActions.push(() => showPage(pageIndex + 1));
-    }
-
-    // Always add main menu button at the end
-    if (canPlayerUseMenu(player)) {
-      if (pageIndex > 0 || pageIndex < pages.length - 1) {
-        f.divider();
-      }
-
-      f.button("");
-      pageActions.push(() => main_menu(player));
-    }
-
-    // Show the form for this page
-    f.show(player).then(response => {
-      if (response.selection === undefined) return -1;
-      const action = pageActions[response.selection];
-      if (action) action();
-    });
-  }
-
-  // Start on the first page
-  showPage(0);
-}
 
 function command_menu(player, command, history_index) {
   let save_data = load_save_data();
@@ -5604,7 +5608,13 @@ function command_menu(player, command, history_index) {
     }
 
     if (!cmdVal || deleteToggle) {
-      return typeof(history_index) === "number" ? command_history_menu(player) : visual_command(player);
+      return typeof(history_index) === "number"
+        ? multipage_time_menu(
+            player,
+            generate_history_entries(player),
+            canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+          )
+        : visual_command(player);
     }
 
     if (typeof(history_index) !== "number" && pinToggle) {
@@ -5667,7 +5677,6 @@ async function execute_command(source, cmd, target = "server") {
       command: cmd,
       successful: false,
       unix: Math.floor(Date.now() / 1000),
-      count: 1,
       hidden: false
     });
     update_save_data(save_data);
@@ -5730,45 +5739,24 @@ async function execute_command(source, cmd, target = "server") {
 
     const success = result.successCount > 0;
 
-    let existingCommand = save_data[player_sd_index].command_history.find(entry => entry.command === cmd);
-
-    if (existingCommand) {
-      existingCommand.successful = success;
-      existingCommand.unix = Math.floor(Date.now() / 1000);
-      existingCommand.hidden = false;
-      existingCommand.count++;
-    } else {
-      save_data[player_sd_index].command_history.push({
-        command: cmd,
-        successful: success,
-        unix: Math.floor(Date.now() / 1000),
-        count: 1,
-        hidden: false
-      });
-    }
+    save_data[player_sd_index].command_history.push({
+      command: cmd,
+      successful: success,
+      unix: Math.floor(Date.now() / 1000),
+      hidden: false
+    });
 
     update_save_data(save_data);
     source.sendMessage(success ? "Command executed" : "§cCommand didn't execute");
     return success;
 
   } catch (e) {
-    let existingCommand = save_data[player_sd_index].command_history.find(entry => entry.command === cmd);
-
-    if (existingCommand) {
-      existingCommand.successful = false;
-      existingCommand.unix = Math.floor(Date.now() / 1000);
-    } else {
-      if (save_data[player_sd_index].command_history.length >= 100) {
-        save_data[player_sd_index].command_history.shift();
-      }
-
-      save_data[player_sd_index].command_history.push({
-        command: cmd,
-        successful: false,
-        unix: Math.floor(Date.now() / 1000),
-        hidden: false
-      });
-    }
+    save_data[player_sd_index].command_history.push({
+      command: cmd,
+      successful: false,
+      unix: Math.floor(Date.now() / 1000),
+      hidden: false
+    });
 
     update_save_data(save_data);
     command_menu_result_e(source, e.message, cmd);
@@ -5860,7 +5848,7 @@ async function chain_new(player) {
 
   save_data[player_sd_index].chain_commands.push({
     name: result.response,
-    state: {successful: null, message: null, unix: null},
+    state: {successful: null, message: null, unix: []},
     icon: undefined,
     commands: [],
     pined: false
@@ -5893,7 +5881,8 @@ function chain_overview(player) {
     pinedChains.forEach(chain => {
       const cmdName = chain.name || "Unnamed Chain";
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+      const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
+      const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
 
       form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
       actions.push(() => {
@@ -5916,7 +5905,8 @@ function chain_overview(player) {
     unpinedChains.forEach(chain => {
       const cmdName = chain.name || "Unnamed Chain";
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
-      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix);
+      const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
+      const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
 
       form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
@@ -5960,7 +5950,8 @@ function chain_main(player, chainIndex) {
   form.divider();
   form.label(`Commands in this chain: ${chain.commands.length}`);
   form.label(`Chain ID: ${chainIndex}`);
-  form.label(`Last run: §7${chain.state.unix ? getRelativeTime(Math.floor(Date.now() / 1000) - chain.state.unix) + " ago" : "Never"}§r`);
+  const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
+  form.label(`Last run: §7${lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) + " ago" : "Never"}§r`);
   if (chain.state.successful !== null) {
     form.label(`Last result: ${chain.state.successful ? "§2Successful§r" : "§cFailed§r"}`);
     form.label(`Last message: §7${chain.state.message || "No message"}§r`);
@@ -6265,6 +6256,7 @@ function execute_chain(player, chainIndex) {
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
   let chain = save_data[player_sd_index].chain_commands[chainIndex];
+  let chainState = chain.state;
 
   (async () => {
     for (const cmd of chain.commands) {
@@ -6282,32 +6274,26 @@ function execute_chain(player, chainIndex) {
         }
 
         if (!result) {
-          save_data[player_sd_index].chain_commands[chainIndex].state = {
-            successful: false,
-            message: `Command failed: ${cmd}`,
-            unix: Math.floor(Date.now() / 1000)
-          };
+          chainState.successful = false;
+          chainState.message = `Command failed: ${cmd}`;
+          pushChainUnix(chainState, Math.floor(Date.now() / 1000));
           update_save_data(save_data);
           player.sendMessage(`§cChain execution stopped due to failure.§r`);
           return;
         }
       } catch (e) {
-        save_data[player_sd_index].chain_commands[chainIndex].state = {
-          successful: false,
-          message: `Error executing command: ${e.message || e}`,
-          unix : Math.floor(Date.now() / 1000)
-        };
+        chainState.successful = false;
+        chainState.message = `Error executing command: ${e.message || e}`;
+        pushChainUnix(chainState, Math.floor(Date.now() / 1000));
         update_save_data(save_data);
         player.sendMessage(`§cChain execution stopped due to error on ${cmd}. Open the chain editor to view the error!§r`);
         return;
       }
     }
 
-    save_data[player_sd_index].chain_commands[chainIndex].state = {
-      successful: true,
-      message: NaN,
-      unix: Math.floor(Date.now() / 1000)
-    };
+    chainState.successful = true;
+    chainState.message = null;
+    pushChainUnix(chainState, Math.floor(Date.now() / 1000));
     update_save_data(save_data);
     player.sendMessage(`${save_data[player_sd_index].chain_commands[chainIndex].name} Chain executed successfully.§r`);
   })();
@@ -7268,7 +7254,6 @@ function visual_command_gamemode(player) {
   });
 }
 
-
 /*------------------------
  Settings
 -------------------------*/
@@ -7348,7 +7333,10 @@ function settings_main(viewing_player, input_sd_index) {
       if (aOnline !== bOnline) return aOnline ? -1 : 1;
 
       // 3️⃣ Beide offline → zuletzt online zuerst
-      return b.last_unix - a.last_unix;
+      const lastLoginB = getLastLogin(b);
+      const lastLoginA = getLastLogin(a);
+
+      return lastLoginB - lastLoginA;
     });
 
 
@@ -7363,7 +7351,13 @@ function settings_main(viewing_player, input_sd_index) {
       actions.push(() => settings_rights_main(viewing_player));
     }
 
+    // Button 4: Logs
+    let logs = generate_logs();
 
+    form.button("Logs\n§9" + (logs.length) + " entries", "textures/ui/copy");
+    actions.push(() => {
+      multipage_time_menu(viewing_player, logs, (viewing_player) => settings_main(viewing_player));
+    });
 
     // Button 4: UTC
     let zone = timezone_list.find(zone => zone.utc === save_data[0].utc), zone_text;
@@ -7597,7 +7591,6 @@ function manage_command(viewing_player, input_sd_index) {
     if (action) action();
   });
 }
-
 
 /*------------------------
  storage
@@ -7893,6 +7886,180 @@ function handle_data_action(is_reset, is_delete, viewing_player, selected_save_d
 /*------------------------
  time_zone
 -------------------------*/
+
+// Used by history or time-based logs, shows entries grouped by time and paginated if necessary
+function multipage_time_menu(player, input, go_back_fn) {
+  const save_data = load_save_data();
+
+  input = input.sort((a, b) => b.unix - a.unix);
+
+  const now = Math.floor(Date.now() / 1000);
+  const utcSet = Boolean(save_data[0]?.utc);
+  const utcOffsetMinutes = utcSet ? Math.round((save_data[0].utc || 0) * 60) : 0; // default 0 wenn nicht gesetzt
+
+  // Lokalzeit / Mitternacht-Grenzen (wenn utc nicht gesetzt, verwenden wir einfach lokale timestamps ohne Offset-Anpassung)
+  const nowLocal = new Date((now + utcOffsetMinutes * 60) * 1000);
+  const midLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate());
+  const todayMid = Math.floor(midLocal.getTime() / 1000);
+  const yestMid = todayMid - 24 * 3600;
+  const week7Mid = todayMid - 7 * 24 * 3600;
+
+  // English month names
+  const monthNames = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+
+  // determineGroupLabel akzeptiert jetzt, ob utc gesetzt ist (utcSet).
+  // Falls utc nicht gesetzt ist, liefern wir eine neutrale Gruppe ohne Label.
+  function determineGroupLabel(entryUnix) {
+    if (!utcSet) {
+      // Wenn keine UTC-Einstellung vorhanden: keine zeit-basierten Kategorien anzeigen.
+      // Wir geben eine neutrale Gruppe zurück, damit Zählungen/Logik weiterhin funktionieren,
+      // aber das Label bleibt leer und wird nicht angezeigt.
+      return { group: "ungrouped", label: "" };
+    }
+
+    const diffSec = now - entryUnix;
+    const localUnix = entryUnix + utcOffsetMinutes * 60;
+    const date = new Date(localUnix * 1000);
+
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const hour = date.getHours();
+    const minute = date.getMinutes();
+
+    let group, label;
+    if (diffSec < 3600) {
+      label = `${hour}:${String(minute).padStart(2,'0')} o'clock`;
+      group = `minute-${hour}-${minute}`;
+    } else if (diffSec < 4 * 3600 && localUnix >= todayMid) {
+      label = `${hour} o'clock`;
+      group = `hour-${hour}`;
+    } else if (localUnix >= todayMid && hour < 4) {
+      label = "Today Night";       group = "today-night";
+    } else if (localUnix >= todayMid && hour < 12) {
+      label = "Today Morning";     group = "today-morning";
+    } else if (localUnix >= todayMid && hour < 16) {
+      label = "Today Noon";        group = "today-noon";
+    } else if (localUnix >= todayMid && hour < 20) {
+      label = "Today Afternoon";   group = "today-afternoon";
+    } else if (localUnix >= todayMid) {
+      label = "Today Evening";     group = "today-evening";
+    } else if (localUnix >= yestMid) {
+      label = "Yesterday";         group = "yesterday";
+    } else if (localUnix >= week7Mid) {
+      label = "Last days";         group = "last-days";
+    } else if (diffSec < 14 * 24 * 3600) {
+      label = "Last week";         group = "last-week";
+    } else if (year === nowLocal.getFullYear()) {
+      label = monthNames[month];   group = `month-${month}`;
+    } else {
+      label = String(year);        group = `year-${year}`;
+    }
+
+    return { group, label };
+  }
+
+  // 1. Durchlauf: Zähle Einträge pro Gruppe (wird später pro Seite genutzt)
+  const groupCounts = {};
+  input.forEach(buttonEntry => {
+    const { group } = determineGroupLabel(buttonEntry.unix);
+    groupCounts[group] = (groupCounts[group] || 0) + 1;
+  });
+
+  const pages = [];
+  let currentPage = [];
+
+  for (let i = 0; i < input.length; i++) {
+    currentPage.push(input[i]);
+
+    if (currentPage.length >= 20) {
+      // move last 5 entries into a new page
+      const moved = currentPage.splice(currentPage.length - 5, 5);
+      // push a copy of the current (trimmed) page
+      pages.push([...currentPage]);
+      // start new currentPage with moved entries
+      currentPage = [...moved];
+    }
+  }
+  // push remaining
+  if (currentPage.length > 0) pages.push([...currentPage]);
+
+  // Funktion, die eine bestimmte Seite anzeigt
+  function showPage(pageIndex) {
+    const page = pages[pageIndex];
+
+    // frisches Form für jede Seite
+    let f = new ActionFormData();
+    f.title("History" + (pages.length >= 2 ? " Page " + (pageIndex + 1) + "/" + pages.length : ""));
+    f.body("Select a command!");
+    const pageActions = [];
+
+    if (!utcSet && input.length > 9 && player.playerPermissionLevel === 2 && pageIndex === 0) {
+      f.label("§7Confusing? Enter your time zone!");
+      f.button("Time zone", "textures/ui/world_glyph_color_2x");
+      pageActions.push(() => settings_time_zone(player, 0));
+      f.divider();
+    }
+
+
+    // gleiche Gruppierungslogik wie vorher, aber nur für diese Seite
+    let lastGroup = null;
+    page.forEach(buttonEntry => {
+
+      const diffSec = now - buttonEntry.unix;
+      const { group, label: baseLabel } = determineGroupLabel(buttonEntry.unix);
+
+      // Labels nur anzeigen, wenn utc gesetzt ist UND es ein nicht-leeres Label gibt
+      if (group !== lastGroup && utcSet && baseLabel) {
+        let labelToShow = baseLabel;
+        const count = groupCounts[group] || 0;
+        if (count >= 3) {
+          labelToShow = `${baseLabel} (${count})`;
+        }
+        f.label(labelToShow);
+        lastGroup = group;
+      }
+
+      f.button(buttonEntry.label, buttonEntry.icon);
+      pageActions.push(buttonEntry.actionFn);
+    });
+
+    f.divider();
+
+    // Navigation buttons
+    if (pageIndex > 0) {
+      f.button("Prev");
+      pageActions.push(() => showPage(pageIndex - 1));
+    }
+
+    if (pageIndex < pages.length - 1) {
+      f.button("Next");
+      pageActions.push(() => showPage(pageIndex + 1));
+    }
+
+    // Always add main menu button at the end
+    if (go_back_fn) {
+      if (pageIndex > 0 || pageIndex < pages.length - 1) {
+        f.divider();
+      }
+
+      f.button("");
+      pageActions.push(() => go_back_fn(player));
+    }
+
+    // Show the form for this page
+    f.show(player).then(response => {
+      if (response.selection === undefined) return -1;
+      const action = pageActions[response.selection];
+      if (action) action();
+    });
+  }
+
+  // Start on the first page
+  showPage(0);
+}
 
 function settings_time_zone(player, viewing_mode) {
   const form = new ActionFormData();
@@ -8759,7 +8926,7 @@ function debug_add_fake_player(player) {
       name = player.name
     }
 
-    create_player_save_data(id, name, {last_unix: undefined})
+    create_player_save_data(id, name)
     return debug_sd_editor(player, () => debug_main(player), [])
   });
 }
@@ -8824,7 +8991,7 @@ function settings_rights_main(player) {
     }
 
     // Beide offline → zuletzt online zuerst
-    return b.last_unix - a.last_unix;
+    return getLastLogin(b) - getLastLogin(a);
   });
 
   form.title("Permissions");
@@ -8838,7 +9005,8 @@ function settings_rights_main(player) {
     let displayName = entry.name;
 
     if (isOnline) {
-      displayName += "\n§a(for " + getRelativeTime(now - entry.last_unix) + ")§r";
+      const lastLogin = getLastLogin(entry);
+      displayName += "\n§2(for " + (lastLogin ? getRelativeTime(now - lastLogin) : "unknown") + ")§r";
       const onlineplayer = playerMap.get(entry.id);
 
       if (onlineplayer?.playerPermissionLevel === 2) {
@@ -8860,7 +9028,8 @@ function settings_rights_main(player) {
     let displayName = entry.name;
 
     if (!isOnline) {
-      displayName += "\n§o(since " + getRelativeTime(now - entry.last_unix) + ")§r";
+      const lastLogout = getLastLogout(entry);
+      displayName += "\n§o(since " + (lastLogout ? getRelativeTime(now - lastLogout) : "unknown") + ")§r";
       form.button(displayName, "textures/ui/lan_icon");
 
       buttonMap.push(entry.sd_index);
@@ -8886,7 +9055,6 @@ function settings_rights_main(player) {
   });
 }
 
-// New "About player" page with detailed information
 function settings_rights_data(viewing_player, input_sd_index) {
   let save_data = load_save_data();
   let selected_save_data = save_data[input_sd_index];
@@ -8903,19 +9071,21 @@ function settings_rights_data(viewing_player, input_sd_index) {
   );
 
   if (selected_player) {
+    const lastLogin = getLastLogin(selected_save_data);
     form.label(
       "Online: §ayes §7(for " +
-      getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) +
-      ")§r\n" +
-      "Permission level: " + selected_player.playerPermissionLevel
-    );
-  } else {
-    form.label(
-      "Online: §cno §7(last seen " +
-      getRelativeTime(Math.floor(Date.now() / 1000) - selected_save_data.last_unix) +
-      " ago)§r"
-    );
-  }
+        (lastLogin ? getRelativeTime(Math.floor(Date.now() / 1000) - lastLogin) : "unknown") +
+        ")§r\n" +
+        "Permission level: " + selected_player.playerPermissionLevel
+      );
+    } else {
+      const lastLogout = getLastLogout(selected_save_data);
+      form.label(
+        "Online: §cno §7(last seen " +
+        (lastLogout ? getRelativeTime(Math.floor(Date.now() / 1000) - lastLogout) : "unknown") +
+        " ago)§r"
+      );
+    }
 
   // === CLIENT ===
   if (selected_player) {

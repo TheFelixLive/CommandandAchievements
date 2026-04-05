@@ -5,9 +5,9 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B044",
+  build: "B045",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1775343018,
+  unix: 1775404837927,
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
@@ -48,7 +48,6 @@ const version_info = {
       "Fixed Online time of players not updating properly in the permission menu",
       "Fixed a bug where some help messages wouldn't appear",
     ]
-
   }
 }
 
@@ -3020,11 +3019,11 @@ function registerAllCommands(init) {
     cheatsRequired: false,
     handler: p => {
       const e = load_save_data().find(d => d.id === p.id);
-      if (p.playerPermissionLevel !== 2 && !e?.allowed_commands.length) return {
+      if (p.commandPermissionLevel < 2 && !e?.allowed_commands.length) return {
           status: CustomCommandStatus.Failure,
           message: "There are no commands available to run"
-        };
-        system.run(() =>visual_command(p));
+      };
+      system.run(() =>visual_command(p));
     }
   });
 
@@ -3195,7 +3194,15 @@ system.run(() => {
       }
   }
 
-  startSession(save_data[0], Math.floor(Date.now() / 1000));
+  startSession(save_data[0], Date.now()-1); // Otherwise, the server would be superior to the clients in the UI if they were using the same Unix time.
+
+  // Jup this is only for /reload to start a Session again
+  world.getAllPlayers().forEach(player => {
+    const sd_index = save_data.findIndex(e => e.id === player.id);
+    if (sd_index !== -1) {
+      startSession(save_data[sd_index], Date.now());
+    }
+  });
   update_save_data(save_data);
 })
 
@@ -3203,25 +3210,6 @@ system.run(() => {
 const BASE_KEY = "com2hard:save_data";
 const META_KEY = BASE_KEY + "_meta";
 const MAX_BYTES = 32767;
-
-function migrate_last_unix_to_sessions(entry) {
-    if (!entry || Array.isArray(entry.sessions)) return;
-
-    const sessions = [];
-    const logins = entry.last_unix && Array.isArray(entry.last_unix.login) ? entry.last_unix.login : [];
-    const logouts = entry.last_unix && Array.isArray(entry.last_unix.logout) ? entry.last_unix.logout : [];
-    const count = Math.max(logins.length, logouts.length);
-
-    for (let i = 0; i < count; i++) {
-        const session = {};
-        if (i < logins.length) session.login = logins[i];
-        if (i < logouts.length) session.logout = logouts[i];
-        sessions.push(session);
-    }
-
-    entry.sessions = sessions;
-    delete entry.last_unix;
-}
 
 function getSessions(entry) {
     if (!entry) return [];
@@ -3533,18 +3521,20 @@ function create_player_save_data(playerId, playerName) {
 
       const dynamic_default_structure = default_player_save_data_structure(player_data.op);
       merge_defaults(player_data, dynamic_default_structure);
+      normalizeUnixKeys(target);
 
       if (changes_made) {
           print(`Missing save_data attributes for player ${playerName} (${playerId}) found and added.`);
       }
   }
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = Date.now();
   startSession(save_data[player_sd_index], now);
   if (world.getAllPlayers().find(p => p.id === playerId)) {
     // Player is online
+
     world.getAllPlayers().forEach(player => {
-      if (player.playerPermissionLevel == 2 && player.id !== playerId) {
+      if (player.commandPermissionLevel >= 2 && player.id !== playerId) {
         player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
         player.playSound("random.pop")
       }
@@ -3555,6 +3545,47 @@ function create_player_save_data(playerId, playerName) {
   }
 
   update_save_data(save_data);
+}
+
+// Migration helper for old save data that used last_unix instead of sessions
+function migrate_last_unix_to_sessions(entry) {
+    if (!entry || Array.isArray(entry.sessions)) return;
+
+    const sessions = [];
+    const logins = entry.last_unix && Array.isArray(entry.last_unix.login) ? entry.last_unix.login : [];
+    const logouts = entry.last_unix && Array.isArray(entry.last_unix.logout) ? entry.last_unix.logout : [];
+    const count = Math.max(logins.length, logouts.length);
+
+    for (let i = 0; i < count; i++) {
+        const session = {};
+        if (i < logins.length) session.login = normalizeTimestamp(logins[i]);
+        if (i < logouts.length) session.logout = normalizeTimestamp(logouts[i]);
+        sessions.push(session);
+    }
+
+    entry.sessions = sessions;
+    delete entry.last_unix;
+}
+
+function normalizeUnixKeys(obj) {
+    if (Array.isArray(obj)) {
+        return obj.map(item => normalizeUnixKeys(item));
+    }
+
+    if (typeof obj === 'object' && obj !== null) {
+        for (const key in obj) {
+            const value = obj[key];
+
+            // 🎯 Nur Keys die mit "unix" anfangen
+            if (key.startsWith('unix') && typeof value === 'number') {
+                obj[key] = normalizeTimestamp(value);
+            } else {
+                obj[key] = normalizeUnixKeys(value);
+            }
+        }
+    }
+
+    return obj;
 }
 
 /*------------------------
@@ -3568,7 +3599,7 @@ world.beforeEvents.playerLeave.subscribe(async ({ player }) => {
 
   if (player_sd_index !== -1) {
     print(`player ${player.name} (${player.id}) left!`)
-    endSession(save_data[player_sd_index], Math.floor(Date.now() / 1000));
+    endSession(save_data[player_sd_index], Date.now());
     update_save_data(save_data);
   }
 })
@@ -3576,7 +3607,7 @@ world.beforeEvents.playerLeave.subscribe(async ({ player }) => {
 // Server shutdown (Online Time Tracking)
 system.beforeEvents.shutdown.subscribe(async () => {
   print("Server is shutting down, updating online players' save data...");
-  const now = Math.floor(Date.now() / 1000);
+  const now = Date.now();
 
   let save_data = load_save_data();
 
@@ -3606,13 +3637,15 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
   await system.waitTicks(40); // Wait for the player to be fully joined
 
   // Beta Feedback Request
-  if (version_info.release_type !== 2 && player.playerPermissionLevel === 2) {
+  if (version_info.release_type !== 2 && player.commandPermissionLevel >= 2) {
     player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
   }
 
   // Help reminders
   const lastPlayerSession = getLastSession(save_data[player_sd_index]);
-  if (lastPlayerSession?.login > (Math.floor(Date.now() / 1000) + 604800)) {
+  const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+  if (Date.now() - lastPlayerSession?.login > ONE_WEEK) {
     player.sendMessage("§l§6[§eHelp§6]§r You can always open the menu with the command §l/com2hard:menu§r§f.")
   }
 });
@@ -3987,7 +4020,7 @@ function isCommandAvailable(player, cmd) {
   );
 
   // Permission-Level 2 = immer erlaubt (Admin)
-  if (player.playerPermissionLevel === 2) return true;
+  if (player.commandPermissionLevel >= 2) return true;
 
   if (cmdIndex === -1) return false;
 
@@ -4096,7 +4129,7 @@ function generate_history_entries(player) {
     .map(entry => {
       const cmdName = (entry.command || "").split(" ")[0].replace(/^\//, "").toLowerCase();
       const statusText = entry.successful ? "§2ran§r" : "§cfailed§r";
-      const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - entry.unix);
+      const relativeTime = getRelativeTime(Date.now() - entry.unix);
 
       const matchingCommand = command_list.find(cmd =>
         Array.isArray(cmd.aliases) &&
@@ -4128,7 +4161,7 @@ function generate_history_entries(player) {
           const unixArray = Array.isArray(chain.state.unix) ? chain.state.unix : [chain.state.unix].filter(u => u != null);
           return unixArray.map(unix => {
             const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
-            const relativeTime = getRelativeTime(Math.floor(Date.now() / 1000) - unix);
+            const relativeTime = getRelativeTime(Date.now() - unix);
             return {
               category: "chain",
               entry: chain,
@@ -4151,7 +4184,7 @@ function generate_history_entries(player) {
 
 function canPlayerUseMenu(player, player_sd_index) {
   const save_data = load_save_data();
-  if (player.playerPermissionLevel === 2 && (player_sd_index == save_data.findIndex(e => e.id === player.id))) return true; // Admins immer Zugriff
+  if (player.commandPermissionLevel >= 2 && (player_sd_index == save_data.findIndex(e => e.id === player.id))) return true; // Admins immer Zugriff
 
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
 
@@ -4161,7 +4194,7 @@ function canPlayerUseMenu(player, player_sd_index) {
 function canPlayerUseChains(player, player_sd_index) {
   const save_data = load_save_data();
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
-  if (player.playerPermissionLevel === 2) return true; // Admins immer Zugriff
+  if (player.commandPermissionLevel >= 2) return true; // Admins immer Zugriff
   return save_data[player_sd_index].allow_chains;
 }
 
@@ -4177,96 +4210,186 @@ function pushChainUnix(chainState, timestamp) {
   Logs
 -------------------------*/
 
-function generate_logs() {
+function generate_logs(player) {
   const logs = [];
   const save_data = load_save_data();
+  const min_unix = getLastLogin(save_data[0]) // Since Serber started
 
-  // Process all player data
+  // Hilfsfunktion: relative Zeit
+  const ago = (unix) => getRelativeTime(Date.now() - unix);
+  let actions = []
+
+
+  const createLogActionForm = (title, labels) => {
+    const form = new ActionFormData();
+    form.title(title);
+    form.body("§lGeneral");
+
+    // Alle Labels hinzufügen
+    labels.forEach(label => form.label(label));
+
+    form.divider();
+
+    form.button("")
+    actions.push(() => {
+      settings_main(player);
+    });
+
+    return form;
+  };
+
+  // ----------------------------
+  // Hauptlog-Generierung
+  // ----------------------------
   save_data.forEach((entry, index) => {
-    const playerId = entry.id;
-    const playerName = index == 0 ? "Server" : entry.name || "Unknown";
+    const playerName = index === 0 ? "Server" : entry.name || "Unknown";
 
-    // Process command history
+    // ----- Command History -----
     if (Array.isArray(entry.command_history)) {
-      for (const command of entry.command_history) {
-        if (command.hidden === true) continue; // Skip hidden entries
+      entry.command_history.forEach(command => {
+        if (command.hidden) return;
+        if (command.unix < min_unix) return;
 
         const statusColor = command.successful ? "§2" : "§c";
         const statusText = command.successful ? "Ran" : "Failed";
-        const timeAgo = getRelativeTime(command.unix);
+        const timeAgo = ago(command.unix);
 
         logs.push({
-          label: `${statusColor}${statusText}§r ${command.command}\n${playerName} | ${timeAgo}`,
+          label: `${statusColor}${statusText}§r ${command.command}\n${playerName} | ${timeAgo} ago`,
           icon: command.textures || "textures/ui/chat_send",
           unix: command.unix,
           actionFn: () => {
-            console.log(`Command "${command.command}" executed by ${playerName} - Status: ${command.successful ? "Success" : "Failed"}`);
+            const form = createLogActionForm("Command Details", [
+              `Command: ${command.command}`,
+              `Source: ${playerName}`,
+              `Status: ${command.successful ? "Success" : "Failed"}`,
+              `Time: ${timeAgo} ago`
+            ]);
+            form.show(player).then((response) => {
+              if (response.selection == undefined ) {
+                return -1
+              }
+
+              if (actions[response.selection]) {
+                actions[response.selection]();
+              }
+            });
           }
         });
-      }
+      });
     }
 
-    // Process chain commands
+    // ----- Chain Commands -----
     if (Array.isArray(entry.chain_commands)) {
-      for (const chain of entry.chain_commands) {
+      entry.chain_commands.forEach(chain => {
         const chainName = chain.name || "Unnamed Chain";
-        for (const unix of chain.state.unix) {
+        const timestamps = Array.isArray(chain.state?.unix) ? chain.state.unix : [];
+
+        timestamps.forEach(unix => {
+          if (unix < min_unix) return;
+
           const statusColor = chain.state.successful ? "§2" : "§c";
           const statusText = chain.state.successful ? "Ran" : "Failed";
-          const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - unix);
+          const timeAgo = ago(unix);
 
           logs.push({
-            label: `${statusColor}${statusText}§r ${chainName}\n${playerName} | ${timeAgo}`,
+            label: `${statusColor}${statusText}§r ${chainName}\n${playerName} | ${timeAgo} ago`,
             icon: chain.state.textures || "textures/items/chain",
             unix: unix,
             actionFn: () => {
-              console.log(`Chain "${chainName}" executed by ${playerName} - Status: ${chain.state.successful ? "Success" : "Failed"}`);
+              const form = createLogActionForm("Chain Details", [
+                `Chain: ${chainName}`,
+                `Executed by: ${playerName}`,
+                `Status: ${chain.state.successful ? "Success" : "Failed"}`,
+                `Time: ${timeAgo} ago`
+              ]);
+              form.show(player).then((response) => {
+                if (response.selection == undefined ) {
+                  return -1
+                }
+
+                if (actions[response.selection]) {
+                  actions[response.selection]();
+                }
+            });
             }
           });
-        }
-      }
+        });
+      });
     }
 
-    // Process player login / logout events from sessions
+    // ----- Sessions -----
     const sessions = getSessions(entry);
     sessions.forEach((session, i) => {
-      if (session.logout !== undefined) {
-        const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - session.logout);
-        let sessionDuration = "unknown";
-
-        if (session.login !== undefined) {
-          sessionDuration = getRelativeTime(session.logout - session.login);
-        }
+      // Logout
+      if (session.logout !== undefined && session.logout >= min_unix) {
+        const timeAgo = ago(session.logout);
+        const sessionDuration = session.login !== undefined
+          ? getRelativeTime(session.logout - session.login)
+          : "unknown";
 
         logs.push({
           label: index === 0
-            ? `§cShutdown§r after ${sessionDuration}§r\n${playerName} | ${timeAgo}`
-            : `§cLeft§r after ${sessionDuration}§r\n${playerName} | ${timeAgo}`,
+            ? `§cShutdown§r after ${sessionDuration}§r\n${playerName} | ${timeAgo} ago`
+            : `§cLeft§r after ${sessionDuration}§r\n${playerName} | ${timeAgo} ago`,
           icon: "textures/ui/Ping_Offline_Red",
           unix: session.logout,
           actionFn: () => {
-            console.log(`${playerName} left the server`);
+            const form = createLogActionForm("Session Details", [
+              index === 0
+                ? `§eClosed the server`
+                : `§e${playerName} left the server`,
+              `Time: ${timeAgo} ago`,
+              `Session Duration: ${sessionDuration}`
+            ]);
+            form.show(player).then((response) => {
+              if (response.selection == undefined ) {
+                return -1
+              }
+
+              if (actions[response.selection]) {
+                actions[response.selection]();
+              }
+            });
           }
         });
       }
 
-      if (session.login !== undefined) {
-        const timeAgo = getRelativeTime(Math.floor(Date.now() / 1000) - session.login);
+      // Login
+      if (session.login !== undefined && session.login >= min_unix) {
+        const timeAgo = ago(session.login );
 
         logs.push({
           label: index === 0
-            ? `§2Started§r the Server ${i + 1}. time(s)§r\n${playerName} | ${timeAgo}`
-            : `§2Joined§r the Server ${i + 1}. time(s)§r\n${playerName} | ${timeAgo}`,
+            ? `§2Started§r the Server the ${i + 1}. time§r\n${playerName} | ${timeAgo} ago`
+            : `§2Joined§r the Server the ${i + 1}. time§r\n${playerName} | ${timeAgo} ago`,
           icon: index === 0 ? "textures/ui/servers" : "textures/ui/online",
           unix: session.login,
+          actionFn: () => {
+            const form = createLogActionForm("Session Details", [
+              index === 0
+                ? `§eStarted the server`
+                : `§e${playerName} joined the server`,
+              `Time: ${timeAgo} ago`,
+              `Count: ${i + 1}`
+            ]);
+            form.show(player).then((response) => {
+              if (response.selection == undefined ) {
+                return -1
+              }
+
+              if (actions[response.selection]) {
+                actions[response.selection]();
+              }
+            });
+          }
         });
       }
     });
   });
 
-  // Sort logs by unix timestamp (newest first)
+  // Sortiere Logs nach Unix-Timestamp absteigend
   logs.sort((a, b) => b.unix - a.unix);
-
   return logs;
 }
 
@@ -4939,8 +5062,8 @@ function correctCommand(inputCommand) {
  Time
 -------------------------*/
 
-function getRelativeTime(diff) {
-  let seconds = diff;
+function getRelativeTime(diffMs) {
+  let seconds = Math.floor(diffMs / 1000);
   let minutes = Math.floor(seconds / 60);
   let hours = Math.floor(minutes / 60);
   let days = Math.floor(hours / 24);
@@ -4962,14 +5085,18 @@ function getRelativeTime(diff) {
   if (minutes > 0) {
     return `${minutes} minute${minutes > 1 ? 's' : ''}`;
   }
-  return `a few seconds`
+  return `a few seconds`;
 }
 
-function convertUnixToDate(unixSeconds, utcOffset) {
-  const date = new Date(unixSeconds*1000);
+function convertUnixToDate(timestamp, utcOffset) {
+  // Auto-detect seconds vs ms
+  if (timestamp < 1e12) {
+    timestamp *= 1000;
+  }
+
+  const date = new Date(timestamp);
   const localDate = new Date(date.getTime() + utcOffset * 60 * 60 * 1000);
 
-  // Format the date (YYYY-MM-DD HH:MM:SS)
   const year = localDate.getUTCFullYear();
   const month = String(localDate.getUTCMonth() + 1).padStart(2, '0');
   const day = String(localDate.getUTCDate()).padStart(2, '0');
@@ -4978,14 +5105,25 @@ function convertUnixToDate(unixSeconds, utcOffset) {
   const seconds = String(localDate.getUTCSeconds()).padStart(2, '0');
 
   return {
-    day: day,
-    month: month,
-    year: year,
-    hours: hours,
-    minutes: minutes,
-    seconds: seconds,
-    utcOffset: utcOffset
+    day,
+    month,
+    year,
+    hours,
+    minutes,
+    seconds,
+    utcOffset
   };
+}
+
+function normalizeTimestamp(ts) {
+    if (!ts) return ts;
+
+    // Wenn kleiner als ~2001 in ms → dann Sekunden
+    if (ts < 1e12) {
+        return ts * 1000;
+    }
+
+    return ts;
 }
 
 /*------------------------
@@ -5409,7 +5547,7 @@ function main_menu(player) {
     Main panel
   -------------------------*/
 
-  if (player.playerPermissionLevel !== 2 && save_data[player_sd_index].allowed_commands.length == 0) {
+  if (player.commandPermissionLevel < 2 && save_data[player_sd_index].allowed_commands.length == 0) {
     form.label("§7There are no commands you are allowed to run! Ask your Admin.")
   } else {
 
@@ -5450,7 +5588,7 @@ function main_menu(player) {
         const cmdName = chain.name || "Unnamed Chain";
         const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
         const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
-        const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
+        const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
 
         form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
@@ -5587,7 +5725,7 @@ function command_menu(player, command, history_index) {
 
     form.label("Previous Result:");
     form.label(history_data.successful ? "§2Command executed successfully§r" : "§cCommand failed to execute§r");
-    form.label(save_data[0].utc === undefined ? "§7§oTime: " + getRelativeTime(Math.floor(Date.now() / 1000) - history_data.unix, player) + " ago" : "§7§oDate: " + `${build_date.day}.${build_date.month}.${build_date.year}`);
+    form.label(save_data[0].utc === undefined ? "§7§oTime: " + getRelativeTime(Date.now() - history_data.unix, player) + " ago" : "§7§oDate: " + `${build_date.day}.${build_date.month}.${build_date.year}`);
     form.toggle((version_info.release_type == 0? "Hide from history" : "Delete from history"), {tooltip: "If enabled, this command will be removed from your history after submitting the form."});
   } else if (canPlayerUseChains(player)) {
     form.toggle("Pin to Main Menu", {tooltip: "If enabled, this command will be added to your main menu for quick access."});
@@ -5676,7 +5814,7 @@ async function execute_command(source, cmd, target = "server") {
     save_data[player_sd_index].command_history.push({
       command: cmd,
       successful: false,
-      unix: Math.floor(Date.now() / 1000),
+      unix: Date.now(),
       hidden: false
     });
     update_save_data(save_data);
@@ -5742,7 +5880,7 @@ async function execute_command(source, cmd, target = "server") {
     save_data[player_sd_index].command_history.push({
       command: cmd,
       successful: success,
-      unix: Math.floor(Date.now() / 1000),
+      unix: Date.now(),
       hidden: false
     });
 
@@ -5754,7 +5892,7 @@ async function execute_command(source, cmd, target = "server") {
     save_data[player_sd_index].command_history.push({
       command: cmd,
       successful: false,
-      unix: Math.floor(Date.now() / 1000),
+      unix: Date.now(),
       hidden: false
     });
 
@@ -5882,7 +6020,7 @@ function chain_overview(player) {
       const cmdName = chain.name || "Unnamed Chain";
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
       const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
-      const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
+      const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
 
       form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
       actions.push(() => {
@@ -5906,7 +6044,7 @@ function chain_overview(player) {
       const cmdName = chain.name || "Unnamed Chain";
       const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
       const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
-      const relativeTime = lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) : "Never";
+      const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
 
       form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
 
@@ -5951,7 +6089,7 @@ function chain_main(player, chainIndex) {
   form.label(`Commands in this chain: ${chain.commands.length}`);
   form.label(`Chain ID: ${chainIndex}`);
   const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
-  form.label(`Last run: §7${lastUnix != null ? getRelativeTime(Math.floor(Date.now() / 1000) - lastUnix) + " ago" : "Never"}§r`);
+  form.label(`Last run: §7${lastUnix != null ? getRelativeTime(Date.now() - lastUnix) + " ago" : "Never"}§r`);
   if (chain.state.successful !== null) {
     form.label(`Last result: ${chain.state.successful ? "§2Successful§r" : "§cFailed§r"}`);
     form.label(`Last message: §7${chain.state.message || "No message"}§r`);
@@ -6276,7 +6414,7 @@ function execute_chain(player, chainIndex) {
         if (!result) {
           chainState.successful = false;
           chainState.message = `Command failed: ${cmd}`;
-          pushChainUnix(chainState, Math.floor(Date.now() / 1000));
+          pushChainUnix(chainState, Date.now());
           update_save_data(save_data);
           player.sendMessage(`§cChain execution stopped due to failure.§r`);
           return;
@@ -6284,7 +6422,7 @@ function execute_chain(player, chainIndex) {
       } catch (e) {
         chainState.successful = false;
         chainState.message = `Error executing command: ${e.message || e}`;
-        pushChainUnix(chainState, Math.floor(Date.now() / 1000));
+        pushChainUnix(chainState, Date.now());
         update_save_data(save_data);
         player.sendMessage(`§cChain execution stopped due to error on ${cmd}. Open the chain editor to view the error!§r`);
         return;
@@ -6293,7 +6431,7 @@ function execute_chain(player, chainIndex) {
 
     chainState.successful = true;
     chainState.message = null;
-    pushChainUnix(chainState, Math.floor(Date.now() / 1000));
+    pushChainUnix(chainState, Date.now());
     update_save_data(save_data);
     player.sendMessage(`${save_data[player_sd_index].chain_commands[chainIndex].name} Chain executed successfully.§r`);
   })();
@@ -7270,7 +7408,8 @@ function settings_main(viewing_player, input_sd_index) {
   form.body("Main Menu");
 
   // Status
-  if (is_admin_mode) {
+  const playerToCheck = is_admin_mode ? world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id) : null;
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel < 2)) {
     form.button("Status\n" + (save_data[player_sd_index].allow_menu ? "§aon" : "§coff"), save_data[player_sd_index].allow_menu ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
     actions.push(() => {
       if (!save_data[player_sd_index].allow_menu) {
@@ -7284,7 +7423,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Shortcuts
-  if (canPlayerUseMenu(viewing_player, player_sd_index)) {
+  if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 2)) {
     form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
     actions.push(() => {
       settings_shortcuts(viewing_player, input_sd_index);
@@ -7303,12 +7442,14 @@ function settings_main(viewing_player, input_sd_index) {
     });
   } else if (!is_admin_mode) {
     form.label("§7The Main menu is currently disabled.");
+  } else {
+    form.label("§7Restrictions cannot be applied to a(n) "+CommandPermissionLevel[world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id).commandPermissionLevel] + " player.");
   }
 
   form.divider()
 
   // Multiplayer
-  if (viewing_player.playerPermissionLevel === 2 && !is_admin_mode) {
+  if (viewing_player.commandPermissionLevel >= 3 && !is_admin_mode) {
     form.label("Multiplayer");
 
     // Button 3: Permission
@@ -7320,8 +7461,8 @@ function settings_main(viewing_player, input_sd_index) {
       const aOnline = onlineIds.has(String(a.id));
       const bOnline = onlineIds.has(String(b.id));
 
-      const aOp = aOnline && playerMap.get(a.id)?.playerPermissionLevel === 2;
-      const bOp = bOnline && playerMap.get(b.id)?.playerPermissionLevel === 2;
+      const aOp = aOnline && playerMap.get(a.id)?.commandPermissionLevel >= 2;
+      const bOp = bOnline && playerMap.get(b.id)?.commandPermissionLevel >= 2;
 
       // 1️⃣ Online OP
       if (aOnline && bOnline) {
@@ -7352,7 +7493,7 @@ function settings_main(viewing_player, input_sd_index) {
     }
 
     // Button 4: Logs
-    let logs = generate_logs();
+    let logs = generate_logs(viewing_player);
 
     form.button("Logs\n§9" + (logs.length) + " entries", "textures/ui/copy");
     actions.push(() => {
@@ -7385,7 +7526,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Commands
-  if (is_admin_mode) {
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel < 2)) {
     form.label("Commands");
     let label = save_data[player_sd_index].allowed_commands.length > 0 ? "§9" + save_data[player_sd_index].allowed_commands.length + " allowed commands" : "";
     form.button("Allowed commands\n" + label, "textures/ui/chat_send");
@@ -7412,7 +7553,7 @@ function settings_main(viewing_player, input_sd_index) {
   form.label("Other");
 
   // Storage
-  if (viewing_player.playerPermissionLevel === 2) {
+  if (viewing_player.commandPermissionLevel >= 3) {
     if (is_admin_mode) {
       form.button("Storage\n§9" + formatBytes(getBytesfromInput(save_data[input_sd_index]).bytes), "textures/ui/storageIconColor");
       actions.push(() => {
@@ -7428,7 +7569,7 @@ function settings_main(viewing_player, input_sd_index) {
 
   if (!is_admin_mode) {
     // Debug
-    if (version_info.release_type == 0 && viewing_player.playerPermissionLevel === 2) {
+    if (version_info.release_type == 0 && viewing_player.commandPermissionLevel >= 3) {
       form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
       actions.push(() => {
         debug_main(viewing_player);
@@ -7891,18 +8032,20 @@ function handle_data_action(is_reset, is_delete, viewing_player, selected_save_d
 function multipage_time_menu(player, input, go_back_fn) {
   const save_data = load_save_data();
 
-  input = input.sort((a, b) => b.unix - a.unix);
+  input = input
+    .map(entry => ({ ...entry, unix: normalizeTimestamp(entry.unix) }))
+    .sort((a, b) => b.unix - a.unix);
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = Date.now();
   const utcSet = Boolean(save_data[0]?.utc);
-  const utcOffsetMinutes = utcSet ? Math.round((save_data[0].utc || 0) * 60) : 0; // default 0 wenn nicht gesetzt
+  const utcOffsetMinutes = utcSet ? Math.round((save_data[0].utc || 0) * 60) : 0; // default 0 when not set
 
-  // Lokalzeit / Mitternacht-Grenzen (wenn utc nicht gesetzt, verwenden wir einfach lokale timestamps ohne Offset-Anpassung)
-  const nowLocal = new Date((now + utcOffsetMinutes * 60) * 1000);
+  // Lokalzeit / Mitternacht-Grenzen
+  const nowLocal = new Date(now + utcOffsetMinutes * 60 * 1000);
   const midLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate());
-  const todayMid = Math.floor(midLocal.getTime() / 1000);
-  const yestMid = todayMid - 24 * 3600;
-  const week7Mid = todayMid - 7 * 24 * 3600;
+  const todayMid = midLocal.getTime();
+  const yestMid = todayMid - 24 * 3600 * 1000;
+  const week7Mid = todayMid - 7 * 24 * 3600 * 1000;
 
   // English month names
   const monthNames = [
@@ -7920,9 +8063,10 @@ function multipage_time_menu(player, input, go_back_fn) {
       return { group: "ungrouped", label: "" };
     }
 
-    const diffSec = now - entryUnix;
-    const localUnix = entryUnix + utcOffsetMinutes * 60;
-    const date = new Date(localUnix * 1000);
+    entryUnix = normalizeTimestamp(entryUnix);
+    const diffSec = Math.floor((now - entryUnix) / 1000);
+    const localUnixMs = entryUnix + utcOffsetMinutes * 60 * 1000;
+    const date = new Date(localUnixMs);
 
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -7933,22 +8077,22 @@ function multipage_time_menu(player, input, go_back_fn) {
     if (diffSec < 3600) {
       label = `${hour}:${String(minute).padStart(2,'0')} o'clock`;
       group = `minute-${hour}-${minute}`;
-    } else if (diffSec < 4 * 3600 && localUnix >= todayMid) {
+    } else if (diffSec < 4 * 3600 && localUnixMs >= todayMid) {
       label = `${hour} o'clock`;
       group = `hour-${hour}`;
-    } else if (localUnix >= todayMid && hour < 4) {
+    } else if (localUnixMs >= todayMid && hour < 4) {
       label = "Today Night";       group = "today-night";
-    } else if (localUnix >= todayMid && hour < 12) {
+    } else if (localUnixMs >= todayMid && hour < 12) {
       label = "Today Morning";     group = "today-morning";
-    } else if (localUnix >= todayMid && hour < 16) {
+    } else if (localUnixMs >= todayMid && hour < 16) {
       label = "Today Noon";        group = "today-noon";
-    } else if (localUnix >= todayMid && hour < 20) {
+    } else if (localUnixMs >= todayMid && hour < 20) {
       label = "Today Afternoon";   group = "today-afternoon";
-    } else if (localUnix >= todayMid) {
+    } else if (localUnixMs >= todayMid) {
       label = "Today Evening";     group = "today-evening";
-    } else if (localUnix >= yestMid) {
+    } else if (localUnixMs >= yestMid) {
       label = "Yesterday";         group = "yesterday";
-    } else if (localUnix >= week7Mid) {
+    } else if (localUnixMs >= week7Mid) {
       label = "Last days";         group = "last-days";
     } else if (diffSec < 14 * 24 * 3600) {
       label = "Last week";         group = "last-week";
@@ -7996,7 +8140,7 @@ function multipage_time_menu(player, input, go_back_fn) {
     f.body("Select a command!");
     const pageActions = [];
 
-    if (!utcSet && input.length > 9 && player.playerPermissionLevel === 2 && pageIndex === 0) {
+    if (!utcSet && input.length > 9 && player.commandPermissionLevel >= 3 && pageIndex === 0) {
       f.label("§7Confusing? Enter your time zone!");
       f.button("Time zone", "textures/ui/world_glyph_color_2x");
       pageActions.push(() => settings_time_zone(player, 0));
@@ -8008,7 +8152,7 @@ function multipage_time_menu(player, input, go_back_fn) {
     let lastGroup = null;
     page.forEach(buttonEntry => {
 
-      const diffSec = now - buttonEntry.unix;
+      const diffSec = Math.floor((now - normalizeTimestamp(buttonEntry.unix)) / 1000);
       const { group, label: baseLabel } = determineGroupLabel(buttonEntry.unix);
 
       // Labels nur anzeigen, wenn utc gesetzt ist UND es ein nicht-leeres Label gibt
@@ -8369,7 +8513,7 @@ function dictionary_about(player, show_ip = false) {
     "Release type: " + ["dev", "preview", "stable"][version_info.release_type] + "\n" +
     "Build date: " + (
       save_data[0].utc === undefined
-        ? getRelativeTime(Math.floor(Date.now() / 1000) - version_info.unix, player) + " ago\n\n§7Note: Set the time zone to see detailed information"
+        ? getRelativeTime(Date.now() - version_info.unix, player) + " ago\n\n§7Note: Set the time zone to see detailed information"
         : `${build_date.day}.${build_date.month}.${build_date.year} ${build_date.hours}:${build_date.minutes}:${build_date.seconds} (UTC${build_date.utcOffset >= 0 ? '+' : ''}${build_date.utcOffset})`
     ) + "\n" +
     "Status: " + (github_data? (compareVersions((version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag), version_info.version) !== 1? "§aLatest version" : "§6Update available!"): "§cFailed to fetch!")
@@ -8377,7 +8521,7 @@ function dictionary_about(player, show_ip = false) {
 
   form.label("§7© "+ (build_date.year > 2025 ? "2025 - " + build_date.year : build_date.year ) + " TheFelixLive. Licensed under the MIT License.")
 
-  if (!show_ip && server_ip && player.playerPermissionLevel === 2) {
+  if (!show_ip && server_ip && player.commandPermissionLevel >= 3) {
     form.button("Show Public IP");
     actions.push(() => {
       dictionary_about(player, true)
@@ -8477,17 +8621,16 @@ function dictionary_about_changelog(player) {
   form.body("Select a version");
 
   allData.forEach(r => {
-    // Prüfen, ob r.published_at schon Unix-Sekunden ist
-    const publishedUnix = (typeof r.published_at === 'number' && r.published_at < 1e12)
-      ? r.published_at // schon in Sekunden
-      : Math.floor(new Date(r.published_at).getTime() / 1000); // in Sekunden umrechnen
+    const publishedMs = (typeof r.published_at === 'number' && r.published_at < 1e12)
+      ? r.published_at * 1000
+      : new Date(r.published_at).getTime();
 
     let label;
-    let build_date = convertUnixToDate(publishedUnix, save_data[0].utc || 0);
+    let build_date = convertUnixToDate(publishedMs, save_data[0].utc || 0);
 
     let build_text = (
       save_data[0].utc === undefined
-        ? getRelativeTime(Math.floor(Date.now() / 1000) - publishedUnix, player) + " ago"
+        ? getRelativeTime(Date.now() - publishedMs) + " ago"
         : `${build_date.day}.${build_date.month}.${build_date.year}`
     );
 
@@ -8543,7 +8686,7 @@ function dictionary_about_changelog_view(player, version) {
 
 
   const dateStr = `${build_date.day}.${build_date.month}.${build_date.year}`;
-  const relative = getRelativeTime(Math.floor(Date.now() / 1000) - publishedUnix);
+  const relative = getRelativeTime(Date.now() - publishedUnix);
   form.label(`§7As of ${dateStr} (${relative} ago)`);
   form.button("");
 
@@ -8584,7 +8727,7 @@ function dictionary_about_changelog_legacy(player, build_date) {
   }
 
   const dateStr = `${build_date.day}.${build_date.month}.${build_date.year}`;
-  const relative = getRelativeTime(Math.floor(Date.now() / 1000) - unix);
+  const relative = getRelativeTime(Date.now() - unix);
   form.label(`§7As of ${dateStr} (${relative} ago)`);
   form.button("");
 
@@ -8606,7 +8749,7 @@ function dictionary_contact(player) {
     return entry;
   });
   // and this adds information about the dump date and version to ensure whether a dump matches a bug
-  save_data.push({ dump_unix:Math.floor(Date.now() / 1000), name:version_info.name, version:version_info.version, build:version_info.build });
+  save_data.push({ dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
 
   let actions = []
   form.title("Contact")
@@ -8682,7 +8825,7 @@ function debug_main(player) {
   actions.push(() => {
     command_list.forEach(cmd => {
       save_data[player_sd_index].command_history.push({
-        unix: Math.floor(Date.now() / 1000),
+        unix: Date.now(),
         command: "/" + cmd.name,
         successful: true,
         hidden: false
@@ -8967,76 +9110,93 @@ function settings_rights_main(player) {
     sd_index: index + 1 // wegen slice(1)
   }));
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = Date.now();
 
-  newList.sort((a, b) => {
-    const aOnline = playerMap.has(a.id);
-    const bOnline = playerMap.has(b.id);
+  function getIconforPermissionLevel(level) {
+    if (level === 0) return "textures/ui/permissions_member_star"
+    if (level === 2) return "textures/ui/op"
+  }
 
-    const aOp = aOnline ? playerMap.get(a.id)?.playerPermissionLevel === 2 : false;
-    const bOp = bOnline ? playerMap.get(b.id)?.playerPermissionLevel === 2 : false;
+  // Kategorisiere Online-Spieler nach commandPermissionLevel
+  const permissionLevels = Object.keys(CommandPermissionLevel)
+    .map(key => {
+      const index = Number(key); // 0,1,2,...
+      const name = CommandPermissionLevel[index]; // Name vom Index
+      return {
+        name,
+        icon: getIconforPermissionLevel(index),
+        players: []
+      };
+    });
 
-    const aName = a.name.toLowerCase();
-    const bName = b.name.toLowerCase();
+  let offlinePlayers = [];
 
-    // Online zuerst
-    if (aOnline && !bOnline) return -1;
-    if (!aOnline && bOnline) return 1;
+  newList.forEach(entry => {
+    const isOnline = playerMap.has(entry.id);
 
-    // Beide online → OP zuerst, dann Name
-    if (aOnline && bOnline) {
-      if (aOp && !bOp) return -1;
-      if (!aOp && bOp) return 1;
-      return aName.localeCompare(bName);
+    if (isOnline) {
+      const onlineplayer = playerMap.get(entry.id);
+      const permLevel = onlineplayer?.commandPermissionLevel || 0;
+
+      if (permissionLevels[permLevel]) {
+        permissionLevels[permLevel].players.push(entry);
+      }
+    } else {
+      offlinePlayers.push(entry);
     }
-
-    // Beide offline → zuletzt online zuerst
-    return getLastLogin(b) - getLastLogin(a);
   });
 
+  // Sortiere innerhalb jeder Kategorie A-Z
+  Object.values(permissionLevels).forEach(categorie => {
+    categorie.players.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  });
+
+  // Sortiere offline Spieler nach zuletzt online
+  offlinePlayers.sort((a, b) => getLastLogin(b) - getLastLogin(a));
+
   form.title("Permissions");
-  form.body("Online players");
 
   let buttonMap = [];
 
-  // Online Spieler
-  newList.forEach(entry => {
-    const isOnline = playerMap.has(entry.id);
-    let displayName = entry.name;
+  let firstBodyUsed = false;
 
-    if (isOnline) {
-      const lastLogin = getLastLogin(entry);
-      displayName += "\n§2(for " + (lastLogin ? getRelativeTime(now - lastLogin) : "unknown") + ")§r";
-      const onlineplayer = playerMap.get(entry.id);
-
-      if (onlineplayer?.playerPermissionLevel === 2) {
-        form.button(displayName, "textures/ui/op");
+  [...permissionLevels].reverse().forEach(levelInfo => {
+    if (levelInfo.players.length > 0) {
+      if (!firstBodyUsed) {
+        form.body(levelInfo.name + " (" + levelInfo.players.length + ")");
+        firstBodyUsed = true;
       } else {
-        form.button(displayName, "textures/ui/permissions_member_star");
+        form.label(levelInfo.name + " (" + levelInfo.players.length + ")");
       }
 
-      buttonMap.push(entry.sd_index);
+      levelInfo.players.forEach(entry => {
+        const lastLogin = getLastLogin(entry);
+        let displayName = entry.name;
+        displayName += "\n§2(for " + (lastLogin ? getRelativeTime(now - lastLogin) : "unknown") + ")§r";
+
+        form.button(displayName, levelInfo.icon);
+        buttonMap.push(entry.sd_index);
+      });
+
+      form.divider();
     }
   });
 
-  form.divider();
-  form.label("Offline players");
+  // Zeige Offline-Spieler
+  if (offlinePlayers.length > 0) {
+    form.label("Offline players (" + offlinePlayers.length + ")");
 
-  // Offline Spieler
-  newList.forEach(entry => {
-    const isOnline = playerMap.has(entry.id);
-    let displayName = entry.name;
-
-    if (!isOnline) {
+    offlinePlayers.forEach(entry => {
       const lastLogout = getLastLogout(entry);
+      let displayName = entry.name;
       displayName += "\n§o(since " + (lastLogout ? getRelativeTime(now - lastLogout) : "unknown") + ")§r";
+
       form.button(displayName, "textures/ui/lan_icon");
-
       buttonMap.push(entry.sd_index);
-    }
-  });
+    });
 
-  form.divider();
+    form.divider();
+  }
 
   // Zurück Button
   form.button("");
@@ -9074,15 +9234,15 @@ function settings_rights_data(viewing_player, input_sd_index) {
     const lastLogin = getLastLogin(selected_save_data);
     form.label(
       "Online: §ayes §7(for " +
-        (lastLogin ? getRelativeTime(Math.floor(Date.now() / 1000) - lastLogin) : "unknown") +
+        (lastLogin ? getRelativeTime(Date.now() - lastLogin) : "unknown") +
         ")§r\n" +
-        "Permission level: " + selected_player.playerPermissionLevel
+        "Command Permission: " + CommandPermissionLevel[selected_player.commandPermissionLevel]
       );
     } else {
       const lastLogout = getLastLogout(selected_save_data);
       form.label(
         "Online: §cno §7(last seen " +
-        (lastLogout ? getRelativeTime(Math.floor(Date.now() / 1000) - lastLogout) : "unknown") +
+        (lastLogout ? getRelativeTime(Date.now() - lastLogout) : "unknown") +
         " ago)§r"
       );
     }

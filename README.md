@@ -80,4 +80,4 @@ A: Yes, the addon is fully compatible with hardcore mode, allowing you to use it
 7. `Play` or `Create` your World.
 
 ## License & Attribution
-This project is licensed under the [MIT License](./LICENSE).
+This project is licensed under the [MIT License](./LICENSE.txt).

@@ -5,9 +5,10 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.0.0",
-  build: "B045",
-  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1775404837927,
+  build: "B046",
+  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1775411647954,
+  update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
@@ -34,8 +35,9 @@ const version_info = {
       "Improved the logic for command syntax fixing.",
       "Chains now appear in the history list.",
       "Client Information in the Permission menu is now more detailed and better organized",
-      "SD-Console dumps are now available for all release types"
-
+      "SD-Console dumps are now available for all release types",
+      "The About menu is now Host only.",
+      "Readded Update message"
     ],
     // bug_fixes
     bug_fixes: [
@@ -5273,30 +5275,39 @@ system.run(() => {
 });
 
 async function update_github_data() {
-  try {
-    fetchViaInternetAPI("https://api.github.com/repos/TheFelixLive/Command2Hardcore/releases")
-    .then(result => {
-      print("API-Antwort erhalten");
+  fetchViaInternetAPI("https://api.github.com/repos/TheFelixLive/Command2Hardcore/releases")
+  .then(result => {
+    print("API-Antwort erhalten");
 
-      github_data = result.map(release => {
-        const totalDownloads = release.assets?.reduce((sum, asset) => sum + (asset.download_count || 0), 0) || 0;
-        return {
-          tag: release.tag_name,
-          name: release.name,
-          prerelease: release.prerelease,
-          published_at: release.published_at,
-          body: release.body,
-          download_count: totalDownloads
-        };
-      });
-
-    })
-    .catch(err => {
-      print("Fehler beim Abruf: " + err);
+    github_data = result.map(release => {
+      const totalDownloads = release.assets?.reduce((sum, asset) => sum + (asset.download_count || 0), 0) || 0;
+      return {
+        tag: release.tag_name,
+        name: release.name,
+        prerelease: release.prerelease,
+        published_at: release.published_at,
+        body: release.body,
+        download_count: totalDownloads
+      };
     });
 
-  } catch (e) {
-  }
+    let latest_online_version = version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag
+
+    if (compareVersions(latest_online_version, version_info.version) == 1) {
+      world.getAllPlayers().forEach(p => {
+        if (p.commandPermissionLevel >= 3) p.sendMessage("§l§1[§9Update§1§l]§r "+ latest_online_version + " is now out! You can finde the Changelog under §lSettings -> About -> Changelogs§r. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
+      });
+    }
+
+  })
+  .catch(err => {
+    print("Fehler beim Abruf: " + err + " using update_message_period_unix‎");
+    if (Date.now() > (version_info.unix + version_info.update_message_period_unix)) {
+      world.getAllPlayers().forEach(p => {
+        if (p.commandPermissionLevel >= 3) p.sendMessage("§l§1[§9Update§1§l]§r Your current version (" + version_info.version + ") is older than " + getRelativeTime(version_info.update_message_period_unix) +".\nThere MIGHT be a newer version out. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
+      });
+    }
+  });
 }
 
 function compareVersions(version1, version2) {
@@ -7567,21 +7578,24 @@ function settings_main(viewing_player, input_sd_index) {
     }
   }
 
-  if (!is_admin_mode) {
+  if (!is_admin_mode && viewing_player.commandPermissionLevel >= 3) {
     // Debug
-    if (version_info.release_type == 0 && viewing_player.commandPermissionLevel >= 3) {
+    if (version_info.release_type == 0 ) {
       form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
       actions.push(() => {
         debug_main(viewing_player);
       });
     }
-  }
 
-  // Dictionary
-  form.button("About\n", "textures/ui/infobulb");
-  actions.push(() => {
-    is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player);
-  });
+    // Dictionary
+    let latest_online_version = github_data? version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag : null
+    let update_text = github_data? (compareVersions(latest_online_version, version_info.version) !== 1? "" : "§9" + version_info.version +" -> "+ latest_online_version): Date.now() > (version_info.unix + version_info.update_message_period_unix)? "§9Update available!" : ""
+
+    form.button("About\n"+update_text, "textures/ui/infobulb");
+    actions.push(() => {
+      is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player);
+    });
+  }
 
 
 
@@ -7834,10 +7848,20 @@ function dump_storage(player) {
   form.title("Dump storage");
   let save_data = load_save_data();
 
+  // Yes, that's right, you're not dumping the full "save_data". The player names are removed here for data protection reasons
+  save_data = save_data.map(entry => {
+    if ("name" in entry) {
+      return { ...entry, name: "" };
+    }
+    return entry;
+  });
+  // and this adds information about the dump date and version to ensure whether a dump matches a bug
+  save_data.push({ dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
+
   form.body("Recommended way to dump");
   form.button("Dump SD\nvia. server console");
   actions.push(() => {
-    print(save_data)
+    console.log(JSON.stringify(save_data))
   });
   form.label("§7If you are the host of the world, make sure that §lSettings -> Creator -> Enable Content Log File / GUI§r§7 is enabled to see the dump in your console.");
 
@@ -8496,6 +8520,8 @@ function dictionary_about(player, show_ip = false) {
   let save_data = load_save_data()
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
+  let latest_online_version = github_data? version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag : null
+
   let build_date = convertUnixToDate(version_info.unix, save_data[0].utc || 0);
   form.title("About")
 
@@ -8516,7 +8542,7 @@ function dictionary_about(player, show_ip = false) {
         ? getRelativeTime(Date.now() - version_info.unix, player) + " ago\n\n§7Note: Set the time zone to see detailed information"
         : `${build_date.day}.${build_date.month}.${build_date.year} ${build_date.hours}:${build_date.minutes}:${build_date.seconds} (UTC${build_date.utcOffset >= 0 ? '+' : ''}${build_date.utcOffset})`
     ) + "\n" +
-    "Status: " + (github_data? (compareVersions((version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag), version_info.version) !== 1? "§aLatest version" : "§6Update available!"): "§cFailed to fetch!")
+    "Status: " + (github_data? (compareVersions(latest_online_version, version_info.version) !== 1? "§aLatest version" : "§6Update available ("+latest_online_version+")!"): Date.now() > (version_info.unix + version_info.update_message_period_unix)? "§6MAYBE an Update available!" : "§cFailed to fetch!")
   );
 
   form.label("§7© "+ (build_date.year > 2025 ? "2025 - " + build_date.year : build_date.year ) + " TheFelixLive. Licensed under the MIT License.")
@@ -8672,11 +8698,11 @@ function dictionary_about_changelog(player) {
 
 function dictionary_about_changelog_view(player, version) {
   let save_data = load_save_data()
-  const publishedUnix = (typeof version.published_at === 'number' && version.published_at < 1e12)
-  ? version.published_at // schon in Sekunden
-  : Math.floor(new Date(version.published_at).getTime() / 1000);
+  const publishedMs = typeof version.published_at === 'number' && version.published_at < 1e12
+    ? version.published_at * 1000
+    : new Date(version.published_at).getTime();
 
-  let build_date = convertUnixToDate(publishedUnix, save_data[0].utc || 0);
+  let build_date = convertUnixToDate(publishedMs, save_data[0].utc || 0);
 
   if (version.name == version_info.version) return dictionary_about_changelog_legacy(player, build_date)
   const form = new ActionFormData().title("Changelog - " + version.name);
@@ -8686,7 +8712,7 @@ function dictionary_about_changelog_view(player, version) {
 
 
   const dateStr = `${build_date.day}.${build_date.month}.${build_date.year}`;
-  const relative = getRelativeTime(Date.now() - publishedUnix);
+  const relative = getRelativeTime(Date.now() - publishedMs);
   form.label(`§7As of ${dateStr} (${relative} ago)`);
   form.button("");
 
@@ -8738,18 +8764,6 @@ function dictionary_about_changelog_legacy(player, build_date) {
 
 function dictionary_contact(player) {
   let form = new ActionFormData()
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  // Yes, that's right, you're not dumping the full "save_data". The player names are removed here for data protection reasons
-  save_data = save_data.map(entry => {
-    if ("name" in entry) {
-      return { ...entry, name: "" };
-    }
-    return entry;
-  });
-  // and this adds information about the dump date and version to ensure whether a dump matches a bug
-  save_data.push({ dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
 
   let actions = []
   form.title("Contact")

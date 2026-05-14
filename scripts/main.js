@@ -5,9 +5,9 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0",
-  build: "B050",
+  build: "B051",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778786573169,
+  unix: 1778791790489,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -2966,9 +2966,17 @@ const block_command_list = [
 let old_version = undefined; // If the got updated with this sesion, this variable contains the old version number. This is used to show update notes in the main menu
 let server_mode = false; // Whether the current world is in a server environment (i.e. has a server running, or is connected to a server) or not. This is used to determine whether to show the "Server" tab in the main menu
 
-system.run(() => {
+system.run(async() => {
   // Checks if the world is in a server environment
-  server_mode = !world.getAllPlayers().some(player => player.commandPermissionLevel >= 3);
+  let players = world.getAllPlayers();
+
+  while (players.length == 0) {
+    await system.waitTicks(20);
+    players = world.getAllPlayers();
+  }
+
+  server_mode = !players.some(p => p.commandPermissionLevel >= 3);
+  print("Server environment: "+server_mode);
 });
 
 
@@ -3736,6 +3744,21 @@ function create_player_save_data(playerId, playerName) {
   update_save_data(save_data);
 }
 
+function assign_missing_ownership_if_needed(player) {
+  if (!server_mode || player.commandPermissionLevel < 1) return false;
+
+  const save_data = load_save_data();
+  if (save_data.some(entry => entry.has_ownership)) return false;
+
+  const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+  if (player_sd_index === -1) return false;
+
+  save_data[player_sd_index].has_ownership = true;
+  update_save_data(save_data);
+  print(`Ownership auto-assigned to ${player.name} (${player.id}) in server mode.`);
+  return true;
+}
+
 // Migration helper for old save data that used last_unix instead of sessions
 function migrate_last_unix_to_sessions(entry) {
     if (!entry || Array.isArray(entry.sessions)) return;
@@ -3819,6 +3842,7 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
 
   // If the player is joining for the first time, create their save data entry or update it if it already exists (e.g. due to missing attributes)
   create_player_save_data(player.id, player.name);
+  assign_missing_ownership_if_needed(player);
 
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
@@ -5635,7 +5659,7 @@ async function update_github_data() {
 
     if (compareVersions(latest_online_version, version_info.version) == 1) {
       world.getAllPlayers().forEach(p => {
-        if (p.commandPermissionLevel >= 3) p.sendMessage("§l§1[§9Update§1§l]§r "+ latest_online_version + " is now out! You can finde the Changelog under §lSettings -> About -> Changelogs§r. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
+        if (playerIsAdmin(p)) p.sendMessage("§l§1[§9Update§1§l]§r "+ latest_online_version + " is now out! You can finde the Changelog under §lSettings -> About -> Changelogs§r. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
       });
     }
 
@@ -5644,7 +5668,7 @@ async function update_github_data() {
     print("Fehler beim Abruf: " + err + " using update_message_period_unix‎");
     if (Date.now() > (version_info.unix + version_info.update_message_period_unix)) {
       world.getAllPlayers().forEach(p => {
-        if (p.commandPermissionLevel >= 3) p.sendMessage("§l§1[§9Update§1§l]§r Your current version (" + version_info.version + ") is older than " + getRelativeTime(version_info.update_message_period_unix) +".\nThere MIGHT be a newer version out. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
+        if (playerIsAdmin(p)) p.sendMessage("§l§1[§9Update§1§l]§r Your current version (" + version_info.version + ") is older than " + getRelativeTime(version_info.update_message_period_unix) +".\nThere MIGHT be a newer version out. Feel free to update to enjoy the latest features!\nCheck out: §7"+links[0].link)
       });
     }
   });
@@ -5884,7 +5908,7 @@ function main_menu(player) {
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  if (old_version != undefined && player.commandPermissionLevel >= 3) {
+  if (old_version != undefined && playerIsAdmin(player)) {
     old_version = undefined; // Einmalige Warnung pro Session
 
     let build_date = convertUnixToDate(version_info.unix, save_data[0].utc || 0);
@@ -7922,7 +7946,7 @@ function settings_main(viewing_player, input_sd_index) {
   form.divider()
 
   // Multiplayer
-  if (viewing_player.commandPermissionLevel >= 3 && !is_admin_mode) {
+  if (playerIsAdmin(viewing_player) && !is_admin_mode) {
     form.label("Multiplayer");
 
     // Button 3: Permission
@@ -8026,7 +8050,7 @@ function settings_main(viewing_player, input_sd_index) {
   form.label("Other");
 
   // Storage
-  if (viewing_player.commandPermissionLevel >= 3) {
+  if (playerIsAdmin(viewing_player)) {
     if (is_admin_mode) {
       form.button("Storage\n§9" + formatBytes(getBytesfromInput(save_data[input_sd_index]).bytes), "textures/ui/storageIconColor");
       actions.push(() => {
@@ -8047,7 +8071,7 @@ function settings_main(viewing_player, input_sd_index) {
     });
   }
 
-  if (!is_admin_mode && viewing_player.commandPermissionLevel >= 3) {
+  if (!is_admin_mode && playerIsAdmin(viewing_player)) {
     // Debug
     if (version_info.release_type == 0 ) {
       form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
@@ -8065,6 +8089,7 @@ function settings_main(viewing_player, input_sd_index) {
       is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player);
     });
   }
+
 
 
 
@@ -8360,17 +8385,24 @@ function dump_storage(player) {
     if ("name" in entry) {
       return { ...entry, name: "" };
     }
+    if ("version" in entry) {
+      return { ...entry };
+    }
     return entry;
   });
   // and this adds information about the dump date and version to ensure whether a dump matches a bug
-  save_data.push({ dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
+  save_data.push({ server_mode: server_mode, dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
 
-  form.body("Recommended way to dump");
-  form.button("Dump SD\nvia. server console");
-  actions.push(() => {
-    console.log(JSON.stringify(save_data))
-  });
-  form.label("§7If you are the host of the world, make sure that §lSettings -> Creator -> Enable Content Log File / GUI§r§7 is enabled to see the dump in your console.");
+  if (!server_mode || server_ip !== "") {
+    form.body("Recommended way to dump");
+    form.button("Dump SD\nvia. server console");
+    actions.push(() => {
+      console.log(JSON.stringify(save_data))
+    });
+    form.label("§7If you are the host of the world, make sure that §lSettings -> Creator -> Enable Content Log File / GUI§r§7 is enabled to see the dump in your console.");
+  } else {
+    form.body("Console dumping is not available in server mode. Please use the alternative way to dump or enable the server-net module.");
+  }
 
   form.label("Alternative ways to dump");
   form.button("Dump SD\nvia. privat chat");
@@ -8671,7 +8703,7 @@ function multipage_time_menu(player, input, go_back_fn) {
     f.body("Select a command!");
     const pageActions = [];
 
-    if (!utcSet && input.length > 9 && player.commandPermissionLevel >= 3 && pageIndex === 0) {
+    if (!utcSet && input.length > 9 && playerIsAdmin(player) && pageIndex === 0) {
       f.label("§7Confusing? Enter your time zone!");
       f.button("Time zone", "textures/ui/world_glyph_color_2x");
       pageActions.push(() => settings_time_zone(player, 0));

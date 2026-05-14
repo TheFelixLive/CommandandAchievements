@@ -5,28 +5,28 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0",
-  build: "B051",
-  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778791790489,
+  build: "B052",
+  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1778792197583,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Readded /tp, /camera & /execute command",
-      "Added /seed command to get the world seed",
-      "Visual Commands for chains",
+      "Reintroduced /tp, /camera, and /execute commands",
+      "Added /seed command for quick world-seed lookup",
+      "Introduced visual command support for chain editing",
     ],
     // general_changes
     general_changes: [
-      "Changelog opens automatically after updating to a new version",
-      "Updated the command list and command syntax",
-      "Added enviroment to the about section, which shows some information about the hardware of the device",
+      "Changelog now opens automatically after updating to a new version",
+      "Refined command list coverage and updated command syntaxes",
+      "Added an Environment section in About with hardware/platform details",
     ],
     // bug_fixes
     bug_fixes: [
-      // "Fixing some bugs related to admins being no able to use there rights to on realms",
-      "Fixed a bug which crashed the addon when trying to insert an undefined location with the visual command menu",
+      "Resolved admin-rights issues on Realms",
+      "Fixed a crash caused by inserting an undefined location in the visual command menu",
     ]
   }
 }

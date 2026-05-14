@@ -19,301 +19,186 @@ Dieses Projekt ist ein Minecraft Bedrock Behavior Pack namens "Command&Achieveme
 - **Speicher**: Dynamic Properties mit Chunking fÃ¼r groÃŸe Datenmengen
 - **Architektur**: Modulares Design mit separaten Abschnitten fÃ¼r verschiedene Funktionen
 
+# Command & Achievement Behavior Pack – Dokumentation
+
+## Inhaltsverzeichnis
+1. [Projektübersicht](#projektübersicht)
+2. [Hauptfunktionen](#hauptfunktionen)
+3. [Technische Details](#technische-details)
+4. [Wichtige Konstanten](#wichtige-konstanten)
+5. [API‑Übersicht](#api‑übersicht)
+6. [Command‑Syntax System (v2)](#command‑syntax-system-v2)
+7. [Best Practices & Konsistenzregeln](#best-practices--konsistenzregeln)
+8. [Hilfsfunktionen](#hilfsfunktionen)
+9. [Entwicklungs‑ und Beitragsrichtlinien](#entwicklungs‑und‑beitragsrichtlinien)
+10. [Synchronisation mit der offiziellen Dokumentation](#synchronisation-mit-der-offiziellen-dokumentation)
+
+---
+
+## Projektübersicht
+Dieses **Behavior Pack** erweitert Minecraft Bedrock Edition um ein umfangreiches **Command‑ und Achievement‑System**. Es ermöglicht das Erstellen, Verwalten und Ausführen von benutzerdefinierten Befehlen sowie das Speichern von Spieler‑ und Serverdaten.
+
+---
+
+## Hauptfunktionen
+| Feature | Beschreibung |
+|---|---|
+| **Save‑Data‑Management** | Chunk‑basiertes Speichern großer Datenmengen (Base64‑ oder UTF‑16‑Kodierung) über Dynamic Properties. |
+| **Mehrmenü‑System** | Host‑Client‑Architektur für modulare Add‑on‑Interaktionen. |
+| **Command‑System** | Registrierung, Berechtigungs‑ und Verfügbarkeitsprüfung von Befehlen. |
+| **Gesten‑Steuerung** | Sprünge, Emotes und Kopfnicken als Eingabemethoden. |
+| **Spieler‑Daten‑Handling** | Verwaltung von Join‑Nachrichten, Erinnerungen und individuellen Spieler‑Daten. |
+
+---
+
+## Technische Details
+* **Sprache**: JavaScript (ES6+)
+* **API**: Minecraft Bedrock Script API (`@minecraft/server`)
+* **Speicher**: Dynamic Properties mit automatischem Chunking (max. 32 767 Byte pro Chunk)
+* **Architektur**: Modulares Design – jede Funktionalität befindet sich in eigenen Modulen unter `scripts/`.
+
+---
+
 ## Wichtige Konstanten
-
-- `BASE_KEY`: "com2hard:save_data"
-- `META_KEY`: "com2hard:save_data_meta"
-- `MAX_BYTES`: 32767 (Maximale Bytes pro Chunk)
-
-## Funktionen Ãœbersicht
-
-### Save Data Funktionen
-- `load_save_data()`: LÃ¤dt die gespeicherten Daten
-- `update_save_data(input)`: Speichert Daten in Chunks
-- `getBytesfromSDindex(index)`: Gibt Bytes und Chunks fÃ¼r einen Index zurÃ¼ck
-
-### Menu System
-- `multiple_menu(player)`: Zeigt das HauptmenÃ¼
-- `initialize_multiple_menu()`: Initialisiert das Multi-Addon-MenÃ¼
-
-### Command System
-- `registerAllCommands(init)`: Registriert alle Befehle
-- `isCommandAvailable(player, cmd)`: PrÃ¼ft BefehlsverfÃ¼gbarkeit
-
-## Update-Prozess fÃ¼r Command-Syntax System (v2)
-
-### ðŸŽ¯ Ziel
-Dieses Dokument beschreibt, wie neue Commands hinzugefÃ¼gt oder bestehende Commands erweitert werden, ohne die bestehende Syntax-Struktur zu brechen.
-
-Das System basiert auf einer **rekursiven Command-Grammatik** mit:
-
-* `literal` (Fixpunkte)
-* `enum` (diskrete Auswahl)
-* `next` (Pfadfortsetzung)
-* `optional` (weiche Argumente)
-* zukÃ¼nftig: `choice` (explizite Branches)
+```js
+export const BASE_KEY = "com2hard:save_data";      // Root‑Key für gespeicherte Daten
+export const META_KEY = "com2hard:save_data_meta"; // Metadaten‑Key (Chunk‑Info)
+export const MAX_BYTES = 32767;                     // Maximale Chunk‑Größe in Bytes
+```
 
 ---
 
-## ðŸ§  1. Grundprinzip
-Ein Command ist ein **Syntax-Baum**, kein linearer String.
+## API‑Übersicht
+### Save‑Data‑Funktionen
+* `load_save_data()` – Lädt alle gespeicherten Daten aus den Dynamic Properties.
+* `update_save_data(input)` – Speichert `input` in Chunks, wobei die Chunk‑Größe automatisch beachtet wird.
+* `getBytesFromSDindex(index)` – Gibt den Byte‑Array und die zugehörigen Chunks für einen Index zurück.
 
-```txt
+### Menü‑System
+* `multiple_menu(player)` – Öffnet das Hauptmenü für den angegebenen Spieler.
+* `initialize_multiple_menu()` – Initialisiert das Multi‑Addon‑Menü beim Server‑Start.
+
+### Command‑System
+* `registerAllCommands(init)` – Registriert sämtliche Befehle des Packs.
+* `isCommandAvailable(player, cmd)` – Prüft, ob ein Spieler den Befehl `cmd` ausführen darf.
+
+---
+
+## Command‑Syntax System (v2)
+Das neue System verwendet eine **rekursive AST‑basierte Grammatik**, die folgende Knotentypen unterstützt:
+
+* `literal` – feste Token (z. B. `tp`).
+* `enum` – diskrete Auswahlmöglichkeiten.
+* `next` – Fortsetzung des aktuellen Pfades.
+* `optional` – optionale Argumente (nur am Pfadende erlaubt).
+* `choice` – komplette alternative Pfad‑Strukturen (neu eingeführt).
+
+### Grundprinzip
+Ein Befehl wird als Baum dargestellt, nicht als linearer String. Beispiel‑Struktur:
+
+```text
 Command
- â”œâ”€â”€ literal
- â”œâ”€â”€ enum (Branch)
- â”‚    â”œâ”€â”€ next (Subtree)
- â”‚    â””â”€â”€ next (Subtree)
- â””â”€â”€ optional nodes
+ ├─ literal
+ ├─ enum (Branch)
+ │   └─ next → …
+ └─ optional (Terminal)
 ```
 
----
+### Update‑Regeln (keine Breaking Changes)
+1. **Keine Entfernung oder Umordnung bestehender Pfade** – `enum.value` darf nicht gelöscht oder verschoben werden.
+2. **Erweiterungen ausschließlich über `next`** – neue Argumente werden immer angehängt.
+3. **`enum` bleibt stabil** – neue Werte dürfen nur hinzugefügt werden.
+4. **`next` ist rekursiv** – beliebig tiefe Verschachtelungen sind erlaubt.
+5. **`optional` nur am Ende** – nach einem optionalen Parameter dürfen keine verpflichtenden Parameter folgen.
 
-## ðŸ§© 2. Update-Regeln fÃ¼r bestehende Commands
+### Einführung von `choice`
+`choice` wird verwendet, wenn ein Befehl mehrere strukturell unterschiedliche Pfade besitzt (z. B. `/teleport <entity> <entity>` vs. `/teleport <entity> <location>`).
 
-### ðŸ“Œ Regel 1: Keine Breaking Changes
-Bestehende Pfade dÃ¼rfen nicht entfernt oder umsortiert werden.
-
-âŒ verboten:
-
-* bestehende `enum.value` lÃ¶schen
-* Reihenfolge Ã¤ndern, wenn Parsing davon abhÃ¤ngt
-
----
-
-### ðŸ“Œ Regel 2: Erweiterungen nur Ã¼ber `next`
-Neue Argumente werden **immer angehÃ¤ngt Ã¼ber `next`**, niemals inline ersetzt.
-
-### Beispiel
-
-```js
-{
-  value: "tp",
-  next: [
-    { type: "location", name: "pos" }
-  ]
-}
-```
-
-âž¡ Erweiterung:
-
-```js
-next: [
-  { type: "location", name: "pos" },
-  { type: "bool", name: "safe", optional: true }
-]
-```
-
----
-
-### ðŸ“Œ Regel 3: `enum` = kontrollierter Branchpunkt
-`enum` definiert stabile Optionen.
-
-```js
-{
-  type: "enum",
-  name: "action",
-  value: [...]
-}
-```
-
-#### Regeln:
-
-* `value` ist **stabiler Contract**
-* jede `value` kann eigene `next`-Substruktur haben
-* neue Actions nur hinzufÃ¼gen, niemals alte Ã¤ndern
-
----
-
-### ðŸ“Œ Regel 4: `next` ist rekursiv
-`next` darf beliebig tief verschachtelt werden:
-
-```js
-enum â†’ next â†’ enum â†’ next â†’ enum
-```
-
-âž¡ wird als **AST-Traversal** interpretiert
-
----
-
-### ðŸ“Œ Regel 5: OptionalitÃ¤t nur am Ende eines Pfades
-
-```js
-{ type: "int", name: "count", optional: true }
-```
-
-#### Regeln:
-
-* optional nur fÃ¼r terminale oder eindeutig Ã¼berspringbare Nodes
-* keine Pflichtparameter nach optionalen ohne Branchlogik
-
----
-
-## ðŸŒ¿ 3. EinfÃ¼hrung von `choice` (NEU)
-
-### ðŸ“Œ Zweck
-`choice` ersetzt komplexe oder mehrdeutige `enum + next` Konstrukte, wenn mehrere vollstÃ¤ndige Pfade existieren.
-
----
-
-### ðŸ“¦ Struktur
-
+#### Struktur
 ```js
 {
   type: "choice",
   options: [
-    {
-      name: "pathA",
-      syntaxes: [...]
-    },
-    {
-      name: "pathB",
-      syntaxes: [...]
-    }
+    { name: "entity‑to‑entity", syntaxes: [/* … */] },
+    { name: "entity‑to‑location", syntaxes: [/* … */] }
   ]
+}
+```
+
+#### Verhaltensregeln
+* Der Parser testet die Optionen sequenziell und wählt die **erste vollständige Übereinstimmung**.
+* Backtracking ist obligatorisch, um falsche Pfade zurückzusetzen.
+
+---
+
+## Best Practices & Konsistenzregeln
+| Regel | Beschreibung |
+|---|---|
+| **Keine Ambiguität** | Zwei Pfade dürfen nicht identisch starten, ohne sich eindeutig zu unterscheiden. |
+| **Stabile `enum`‑Werte** | `enum`‑Werte bilden den öffentlichen Vertrag – nie entfernen oder umbenennen. |
+| **Verwendung von `choice`** | Nur bei strukturell unterschiedlichen Argumentbäumen einsetzen. |
+| **Optionale Parameter** | Nur am Ende eines Pfades, keine Pflichtparameter danach. |
+
+---
+
+## Hilfsfunktionen
+```js
+/** Formatiert eine Byte‑Anzahl in lesbare Einheiten */
+export function formatBytes(bytes) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) {
+    bytes /= 1024;
+    i++;
+  }
+  return `${bytes.toFixed(2)} ${units[i]}`;
+}
+
+/** Wandelt Markdown‑Text in das Minecraft‑Text‑Format um */
+export function markdownToMinecraft(md) {
+  // Sehr einfache Umsetzung – für komplexe Fälle bitte Bibliothek nutzen
+  return md.replace(/\*\*(.*?)\*\*/g, "§l$1§r");
+}
+
+/** Konvertiert eine Zahl in römische Ziffern */
+export function toRoman(num) {
+  const map = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
+    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
+    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]
+  ];
+  let result = "";
+  for (const [value, numeral] of map) {
+    while (num >= value) {
+      result += numeral;
+      num -= value;
+    }
+  }
+  return result;
 }
 ```
 
 ---
 
-### ðŸ§  Verhalten
-
-* Parser testet Optionen sequentiell
-* erste vollstÃ¤ndige Ãœbereinstimmung gewinnt
-* kein Mixing zwischen Optionen erlaubt
-* Backtracking Pflicht
-
----
-
-### ðŸ“Œ Wann `choice` verwenden?
-
-#### âŒ NICHT bei:
-
-* einfachen enums
-* optionalen Parametern
-* linearen `next`-Chains
-
-#### âœ… NUR bei:
-
-* strukturell unterschiedlichen ArgumentbÃ¤umen
-* z. B. `/teleport <entity> <entity>` vs `/teleport <entity> <location>`
+## Entwicklungs‑ und Beitragsrichtlinien
+* **Code‑Qualität** – Nutze ESLint mit den empfohlenen Regeln für Minecraft‑Skripte.
+* **Tests** – Füge neue Befehle immer mit mindestens einem Unit‑Test im `tests/`‑Verzeichnis hinzu.
+* **Pull‑Requests** – Beschreibe Änderungen ausführlich und aktualisiere die zugehörige Dokumentation im `docs/commands/`‑Ordner.
+* **Issue‑Tracking** – Verwende das Repository‑Issue‑System für Feature‑Requests und Bug‑Reports.
 
 ---
 
-## ðŸ”€ 4. `enum` vs `choice` vs `next`
+## Synchronisation mit der offiziellen Dokumentation
+Die Befehls‑Dokumentation wird regelmäßig mit der offiziellen Microsoft‑Learn‑Seite abgeglichen:
+* **Quelle**: <https://learn.microsoft.com/en-us/minecraft/creator/commands/commands?view=minecraft-bedrock-stable>
+* **Letztes Update**: 2026‑05‑14
 
-| Typ      | Bedeutung                                   |
-| -------- | ------------------------------------------- |
-| `enum`   | Auswahl eines Tokens innerhalb eines Pfades |
-| `next`   | Fortsetzung desselben Pfades                |
-| `choice` | komplette alternative Pfade                 |
-
----
-
-## ðŸ§¬ 5. Parsing-Regeln (Runtime)
-
-### Reihenfolge:
-
-1. literal match
-2. enum match
-3. choice evaluation (falls vorhanden)
-4. next traversal
-5. optional skip
+### Vorgehen bei zukünftigen Updates
+1. Offizielle Befehlsliste prüfen.
+2. Fehlende Markdown‑Dateien im Ordner `docs/commands/` anlegen oder veraltete entfernen.
+3. `docs/commands/README.md` (Index) und diesen Synchronisations‑Abschnitt aktualisieren.
+4. Änderungen nur dann an bestehenden Detail‑Dateien vornehmen, wenn die offizielle Dokumentation signifikante Änderungen enthält.
 
 ---
 
-### ðŸ” Backtracking
-Wenn ein Pfad fehlschlÃ¤gt:
-
-* Zustand zurÃ¼cksetzen
-* nÃ¤chste enum/choice Option testen
-* niemals Teilverbrauch von Input behalten
-
----
-
-## âš ï¸ 6. Konsistenzregeln
-
-### â— Keine AmbiguitÃ¤t
-
-* zwei Pfade dÃ¼rfen nicht identisch starten ohne Unterscheidung
-* enums mÃ¼ssen eindeutig sein
-
----
-
-### â— Keine stillen Konflikte
-
-Wenn zwei Pfade gleich gut matchen kÃ¶nnten:
-
-âž¡ `choice` muss eingefÃ¼hrt werden
-
----
-
-## ðŸš€ 7. Best Practices
-
-* `enum` fÃ¼r stabile Subcommands
-* `next` fÃ¼r natÃ¼rliche Argumentketten
-* `choice` fÃ¼r echte Strukturdivergenz
-* optional nur fÃ¼r Komfortargumente
-* keine tief verschachtelten enums ohne Notwendigkeit
-
----
-
-## ðŸ“Œ 8. Ziel des Systems
-
-Dieses System ist kein einfacher Command Parser mehr, sondern:
-
-> eine deklarative Command-Grammatik mit AST-Auswertung
-
----
-
-## âœ… Fazit
-
-* `enum` = Auswahl
-* `next` = Fortsetzung
-* `choice` = Branching auf Strukturlevel
-
-Damit wird dein Command-System:
-
-* erweiterbar
-* versionierbar
-* und deutlich stabiler als klassische Parser-Listen
-
----
-
-### Helper Funktionen
-- `formatBytes(bytes)`: Formatiert Bytes in lesbare Einheiten
-- `markdownToMinecraft(md)`: Konvertiert Markdown zu Minecraft-Text
-- `toRoman(num)`: Konvertiert Zahlen zu rÃ¶mischen Ziffern
-
-## Verwendung
-
-Dieses Behavior Pack wird in Minecraft Bedrock Edition geladen und erweitert die Spielmechanik. Es ist fÃ¼r Entwickler gedacht, die komplexe Add-ons erstellen mÃ¶chten.
-
-## Hinweise fÃ¼r LLMs
-
-- Bei Ã„nderungen an Save-Daten immer `update_save_data()` verwenden, um Chunking zu gewÃ¤hrleisten.
-- Dynamic Properties haben GrÃ¶ÃŸenbeschrÃ¤nkungen; daher das Chunking-System.
-- Fehlerbehandlung ist wichtig, da Minecraft-Skripte in einer Sandbox laufen.
-
-## Beitrag
-
-FÃ¼r BeitrÃ¤ge oder Fragen bitte die README.md konsultieren oder Issues im Repository erstellen.
-
-## Bedrock Command Documentation Sync (2026-05-14)
-
-This repository's command documentation was synchronized against the official Bedrock command list:
-- https://learn.microsoft.com/en-us/minecraft/creator/commands/commands?view=minecraft-bedrock-stable
-
-What was updated:
-- Ensured docs/commands contains one markdown file per command from the official list.
-- Kept existing detailed command files (for example fill.md, give.md, tp.md) and generated missing command pages using the standardized template.
-- Added docs/commands/README.md as a machine-readable index of command files.
-
-Current baseline:
-- Command list source page last-updated date shown by Microsoft Learn: 2024-08-01.
-- Local sync date in this repository: 2026-05-14.
-
-Maintenance rule for future updates:
-1. Re-check the official command list URL above.
-2. Add or remove command files in docs/commands to match the current list.
-3. Refresh docs/commands/README.md and this sync section date.
+*Dieses Dokument wird kontinuierlich gepflegt, um Entwicklern eine klare und aktuelle Referenz für das **Command & Achievement** Behavior Pack zu bieten.*

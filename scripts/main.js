@@ -5,9 +5,9 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0",
-  build: "B048",
+  build: "B049",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778769520176,
+  unix: 1778772149426,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -763,9 +763,9 @@ const command_list = [
     textures: "textures/ui/strength_effect",
     description: "Add/remove potion effects",
     recommended: (player) => player.getEffects().length > 0 || !(world.getTimeOfDay() < 12000) || player.isInWater || player.isFalling,
-    vc_hiperlink: (player) => {
-      if (anyplayerHasEffect()) visual_command_effect_select(player);
-      else visual_command_effect_add(player);
+    vc_hiperlink: (player, on_output) => {
+      if (anyplayerHasEffect()) visual_command_effect_select(player, on_output);
+      else visual_command_effect_add(player, on_output);
     },
     vc_available: (player) => true,
     category: 2,
@@ -1347,7 +1347,7 @@ const command_list = [
     name: "enchant",
     aliases: ["enchant"],
     textures: "textures/items/book_enchanted",
-    vc_hiperlink: (player) => visual_command_enchant(player),
+    vc_hiperlink: (player, on_output) => visual_command_enchant(player, on_output),
     vc_available: (player) => true,
     visible: (player) => getCompatibleEnchantmentTypes(player.getComponent("minecraft:inventory")?.container?.getItem(player.selectedSlotIndex)).length > 0,
     recommended: (player) => {
@@ -1476,8 +1476,8 @@ const command_list = [
               {
                 name: "run",
                 syntaxes: [
-                  { type: "exit_loop" },
-                  { type: "command_tail", name: "command" }
+                  { type: "command_tail", name: "command" },
+                  { type: "exit_loop" }
                 ]
               }
             ]
@@ -1661,7 +1661,7 @@ const command_list = [
     aliases: ["gamemode", "gm"],
     textures: "textures/ui/permissions_op_crown",
     description: "Set a player's game mode",
-    vc_hiperlink: (player) => visual_command_gamemode(player),
+    vc_hiperlink: (player, on_output) => visual_command_gamemode(player, on_output),
     vc_available: (player) => true,
     visible: (player) => world.isHardcore === false,
     recommended: (player) => {
@@ -1684,7 +1684,7 @@ const command_list = [
     aliases: ["gamerule"],
     cc_hidden: true,
     textures: "textures/ui/settings_pause_menu_icon",
-    vc_hiperlink: (player) => visual_command_gamerule_new(player),
+    vc_hiperlink: (player, on_output) => visual_command_gamerule_new(player, on_output),
     recommended: (player) => world.gameRules.randomTickSpeed > 100,
     vc_available: (player) => true,
     description: "Set a gamerule",
@@ -2533,7 +2533,7 @@ const command_list = [
     aliases: ["time"],
     textures: "textures/items/clock_item",
     description: "Change or query the time",
-    vc_hiperlink: (player) => visual_command_time(player),
+    vc_hiperlink: (player, on_output) => visual_command_time(player, on_output),
     vc_available: (player) => true,
     recommended: (player) => !(world.getTimeOfDay() < 12000),
     category: 1,
@@ -4209,10 +4209,10 @@ function isVisualCommandAvailable(player, cmd) {
     return null;
   }
 
-  return (player) => cmd.vc_hiperlink(player);
+  return (player, on_output) => cmd.vc_hiperlink(player, on_output);
 }
 
-function generate_command_lists(player) {
+function generate_command_lists(player, on_output) {
   const recommendedEntries = [];
   const allEntries = [];
   const categoryLists = command_categories.map((category, categoryIndex) => ({
@@ -4255,9 +4255,9 @@ function generate_command_lists(player) {
     // action function
     const actionFn = () => {
       if (isVC) {
-        return isVC(player);
+        return isVC(player, on_output);
       } else {
-        return visual_command_generic(player, cmd);
+        return visual_command_generic(player, cmd, on_output);
       }
     };
 
@@ -5866,16 +5866,19 @@ function main_menu(player) {
 
     form.button("Run a command", "textures/ui/color_plus");
     actions.push(() => {
-      let output = visual_command(player);
+      visual_command(player, (output) => {
+        if (!output || !output.command) return;
 
-      if (save_data[player_sd_index].quick_run) {
-        execute_command(player, output.command);
-        if (output.menu) {
-          output.menu();
+        if (save_data[player_sd_index].quick_run) {
+          execute_command(player, output.command).then((success) => {
+            if (success && output.menu) {
+              output.menu();
+            }
+          });
+        } else {
+          command_menu(player, output.command, null, output.menu);
         }
-      } else {
-        command_menu(player, output.command, null);
-      }
+      });
     });
 
     if (canPlayerUseChains(player)) {
@@ -6024,7 +6027,7 @@ function main_menu(player) {
  Enter Command
 -------------------------*/
 
-function command_menu(player, command, history_index) {
+function command_menu(player, command, history_index, on_success_menu) {
   let save_data = load_save_data();
 
   let form = new ModalFormData();
@@ -6119,7 +6122,11 @@ function command_menu(player, command, history_index) {
       targetIdentity = world.getAllPlayers().find(p => p.name === targetName);
     }
 
-    execute_command(player, cmd, targetIdentity);
+    execute_command(player, cmd, targetIdentity).then((success) => {
+      if (success && typeof on_success_menu === "function") {
+        on_success_menu();
+      }
+    });
   });
 }
 
@@ -6778,7 +6785,7 @@ function execute_chain(player, chainIndex) {
  new command
 -------------------------*/
 
-function visual_command(player) {
+function visual_command(player, on_output) {
   let form = new ActionFormData();
   let actions = [];
   let save_data = load_save_data();
@@ -6794,7 +6801,7 @@ function visual_command(player) {
   form.divider();
 
   // --- Listen durch Helper erzeugen ---
-  const {recommendedEntries, allEntries, categoryLists} = generate_command_lists(player);
+  const {recommendedEntries, allEntries, categoryLists} = generate_command_lists(player, on_output);
 
   // --- Recommended ---
   if (recommendedEntries.length) {
@@ -6811,7 +6818,7 @@ function visual_command(player) {
 
     if (recommendedEntries.length > displayCount) {
       form.button("Show more!");
-      actions.push(() => visual_command_overview(player, recommendedEntries));
+      actions.push(() => visual_command_overview(player, recommendedEntries, on_output));
     }
 
     form.divider();
@@ -6824,7 +6831,7 @@ function visual_command(player) {
       if (cat.entries.length === 0) continue;
       const label = `${cat.category.name}\n§o${cat.category.description}§r`;
       form.button(label, cat.category.icon);
-      actions.push(() => visual_command_overview(player, cat.entries));
+      actions.push(() => visual_command_overview(player, cat.entries, on_output));
     }
     form.divider();
   }
@@ -6833,7 +6840,7 @@ function visual_command(player) {
   // --- Show all commands ---
   if (allEntries.length > 0) {
     form.button("Show all commands", "textures/ui/more-dots");
-    actions.push(() => visual_command_overview(player, allEntries));
+    actions.push(() => visual_command_overview(player, allEntries, on_output));
   }
 
   // --- Back button ---
@@ -6850,7 +6857,7 @@ function visual_command(player) {
   });
 }
 
-function visual_command_overview(player, entries) {
+function visual_command_overview(player, entries, on_output) {
   let form = new ActionFormData();
   let actions = [];
   let save_data = load_save_data();
@@ -6915,7 +6922,7 @@ function visual_command_overview(player, entries) {
 
   // Zurück-Button (ohne spezielles Label)
   form.button("");
-  actions.push(() => visual_command(player));
+  actions.push(() => visual_command(player, on_output));
 
   // Anzeige und Auswertung
   form.show(player).then((response) => {
@@ -6934,7 +6941,7 @@ function visual_command_overview(player, entries) {
  visual_command: generic commands
 -------------------------*/
 
-async function visual_command_generic(player, cmd) {
+async function visual_command_generic(player, cmd, on_output) {
   let fullCommand = "";
   const save_data = load_save_data();
   const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
@@ -6962,12 +6969,15 @@ async function visual_command_generic(player, cmd) {
         continue;
       }
       if (part.type === "command_tail") {
-        let result = await menu_text_input(player, {
-          title: "Visual commands - " + cmd.name,
-          prompt: `Enter command: ` + (part.name || "command"),
-          optional: part.optional || false
+        let result = await new Promise((resolve) => {
+          visual_command(player, (output) => {
+            if (!output || !output.command) {
+              return resolve({ canceled: true });
+            }
+            resolve({ response: output.command.replace(/^\/+/, "") });
+          });
         });
-        if (result.skipped) break;
+
         if (result.canceled) return { canceled: true };
         appendToken(result.response);
         continue;
@@ -7006,7 +7016,7 @@ async function visual_command_generic(player, cmd) {
               const nestedRes = await processParts(nestedSyntaxes);
               if (nestedRes?.canceled) return { canceled: true };
               if (nestedRes?.canExitLoop) repeatCanExit = true;
-              if (nestedRes?.requestRepeatExit && count + 1 >= min && repeatCanExit) {
+              if (nestedRes?.requestRepeatExit && count + 1 >= min) {
                 count++;
                 break;
               }
@@ -7019,7 +7029,7 @@ async function visual_command_generic(player, cmd) {
           if (nestedRes?.canceled) return { canceled: true };
           if (nestedRes?.canExitLoop) repeatCanExit = true;
           count++;
-          if (nestedRes?.requestRepeatExit && count >= min && repeatCanExit) break;
+          if (nestedRes?.requestRepeatExit && count >= min) break;
           if (count >= min && repeatCanExit) {
             const cont = await menu_actions_input(player, {
               title: "Visual commands - " + cmd.name,
@@ -7163,11 +7173,14 @@ async function visual_command_generic(player, cmd) {
   }
 
   const result = await processParts(cmd.syntaxes);
-  if (result && result.canceled) return visual_command(player);
+  if (result && result.canceled) return visual_command(player, on_output);
+
+  const output = { command: "/" + fullCommand.replace(/^\/+/, "") };
+  if (typeof on_output === "function") return on_output(output);
 
   save_data[player_sd_index].quick_run
-    ? execute_command(player, fullCommand)
-    : command_menu(player, fullCommand);
+    ? execute_command(player, output.command)
+    : command_menu(player, output.command);
 
 }
 
@@ -7176,7 +7189,7 @@ async function visual_command_generic(player, cmd) {
  visual_command: Gamerule
 -------------------------*/
 
-function visual_command_gamerule_new(player) {
+function visual_command_gamerule_new(player, on_output) {
   let form = new ActionFormData();
   let actions = [];
 
@@ -7213,14 +7226,18 @@ function visual_command_gamerule_new(player) {
     form.button(name + "\n§aon§r", g?.texture);
     actions.push(() => {
       const command = `/gamerule ${g.id} false`;
+      const nextMenu = () => visual_command_gamerule_new(player, on_output);
+      const output = { command, menu: nextMenu };
+      if (typeof on_output === "function") return on_output(output);
 
       const save_data = load_save_data();
       const player_sd_index = save_data.findIndex(e => e.id === player.id);
       if (save_data[player_sd_index].quick_run) {
-        execute_command(player, command, player)
-        visual_command_gamerule_new(player);
+        execute_command(player, command, player).then((success) => {
+          if (success) nextMenu();
+        });
       } else {
-        command_menu(player, command);
+        command_menu(player, command, null, nextMenu);
       }
     });
   });
@@ -7239,17 +7256,21 @@ function visual_command_gamerule_new(player) {
         defaultValue: String(g.value)
       }).then((result) => {
         if (result.canceled) {
-          return visual_command_gamerule_new(player);
+          return visual_command_gamerule_new(player, on_output);
         }
         const newValue = result.response;
         const command = `/gamerule ${g.id} ${newValue}`;
+        const nextMenu = () => visual_command_gamerule_new(player, on_output);
+        const output = { command, menu: nextMenu };
+        if (typeof on_output === "function") return on_output(output);
         const save_data = load_save_data();
         const player_sd_index = save_data.findIndex(e => e.id === player.id);
         if (save_data[player_sd_index].quick_run) {
-          execute_command(player, command, player)
-          visual_command_gamerule_new(player);
+          execute_command(player, command, player).then((success) => {
+            if (success) nextMenu();
+          });
         } else {
-          command_menu(player, command);
+          command_menu(player, command, null, nextMenu);
         }
       });
     });
@@ -7263,14 +7284,18 @@ function visual_command_gamerule_new(player) {
     form.button(name + "\n§coff§r", g?.texture);
     actions.push(() => {
       const command = `/gamerule ${g.id} true`;
+      const nextMenu = () => visual_command_gamerule_new(player, on_output);
+      const output = { command, menu: nextMenu };
+      if (typeof on_output === "function") return on_output(output);
 
       const save_data = load_save_data();
       const player_sd_index = save_data.findIndex(e => e.id === player.id);
       if (save_data[player_sd_index].quick_run) {
-        execute_command(player, command, player)
-        visual_command_gamerule_new(player);
+        execute_command(player, command, player).then((success) => {
+          if (success) nextMenu();
+        });
       } else {
-        command_menu(player, command);
+        command_menu(player, command, null, nextMenu);
       }
     });
   });
@@ -7278,7 +7303,7 @@ function visual_command_gamerule_new(player) {
 
   form.button("");
   actions.push(() => {
-      return visual_command(player);
+      return visual_command(player, on_output);
   });
   // Formular anzeigen
   form.show(player).then((response) => {
@@ -7295,7 +7320,7 @@ function visual_command_gamerule_new(player) {
  visual_command: Enchant
 -------------------------*/
 
-function visual_command_enchant(player) {
+function visual_command_enchant(player, on_output) {
   let form = new ActionFormData();
   let actions = [];
 
@@ -7313,7 +7338,7 @@ function visual_command_enchant(player) {
 
       form.button({ rawtext: [{ translate: "item." + item.typeId.replace(/^[^:]+:/, "") + ".name" }, {text: `\n(${p.name})`}]});
       actions.push(() => {
-        visual_command_enchant_type(player, p, item)
+        visual_command_enchant_type(player, p, item, on_output)
       });
   });
 
@@ -7321,7 +7346,7 @@ function visual_command_enchant(player) {
   form.divider()
   form.button("");
   actions.push(() => {
-      return visual_command(player);
+      return visual_command(player, on_output);
   });
 
   // Formular anzeigen
@@ -7335,7 +7360,7 @@ function visual_command_enchant(player) {
   });
 }
 
-function visual_command_enchant_type(viewing_player, selected_player, item) {
+function visual_command_enchant_type(viewing_player, selected_player, item, on_output) {
   let form = new ActionFormData();
   let actions = [];
 
@@ -7361,21 +7386,24 @@ function visual_command_enchant_type(viewing_player, selected_player, item) {
       const label = humanizeId(e.id) + (e.maxLevel > 1 ? " " + toRoman(e.maxLevel) : "");
       form.button(label);
       actions.push(() => {
-        const command = `/enchant "${selected_player.name}" ${e.id} ` + (e.maxLevel > 1 ? e.maxLevel : "");
+        const command = (`/enchant "${selected_player.name}" ${e.id} ` + (e.maxLevel > 1 ? e.maxLevel : "")).trim();
+        const nextMenu = () => {
+          if (compatibleEnchants.length > 1) {
+            visual_command_enchant_type(viewing_player, selected_player, selected_player.getComponent("minecraft:inventory")?.container?.getItem(selected_player.selectedSlotIndex), on_output);
+          } else {
+            visual_command_enchant(viewing_player, on_output);
+          }
+        };
+
+        const output = { command, menu: nextMenu };
+        if (typeof on_output === "function") return on_output(output);
 
         if (save_data[player_sd_index].quick_run) {
-          execute_command(viewing_player, command, viewing_player)
-
-          if (compatibleEnchants.length > 1) {
-            visual_command_enchant_type(viewing_player, selected_player, selected_player.getComponent("minecraft:inventory")?.container?.getItem(selected_player.selectedSlotIndex))
-          } else {
-            // Exit
-            visual_command_enchant(viewing_player);
-          }
-
-
+          execute_command(viewing_player, command, viewing_player).then((success) => {
+            if (success) nextMenu();
+          });
         } else {
-          command_menu(viewing_player, command);
+          command_menu(viewing_player, command, null, nextMenu);
         }
       });
     }
@@ -7383,7 +7411,7 @@ function visual_command_enchant_type(viewing_player, selected_player, item) {
 
   form.divider();
   form.button("");
-  actions.push(() => { visual_command_enchant(viewing_player); });
+  actions.push(() => { visual_command_enchant(viewing_player, on_output); });
 
   form.show(viewing_player).then((response) => {
     if (response.selection == undefined) return -1;
@@ -7395,7 +7423,7 @@ function visual_command_enchant_type(viewing_player, selected_player, item) {
  visual_command: Effect
 -------------------------*/
 
-function visual_command_effect_select(player) {
+function visual_command_effect_select(player, on_output) {
   let form = new ActionFormData()
   let actions = []
 
@@ -7405,18 +7433,18 @@ function visual_command_effect_select(player) {
 
   form.button("Add an effect", "textures/ui/color_plus");
   actions.push(() => {
-    return visual_command_effect_add(player)
+    return visual_command_effect_add(player, on_output)
   });
 
   form.button("Clear an effect", "textures/blocks/barrier");
   actions.push(() => {
-    return visual_command_effect_clear_player(player)
+    return visual_command_effect_clear_player(player, on_output)
   });
 
   form.divider()
   form.button("");
   actions.push(() => {
-    return visual_command(player)
+    return visual_command(player, on_output)
   });
 
 
@@ -7430,7 +7458,7 @@ function visual_command_effect_select(player) {
   });
 }
 
-function visual_command_effect_clear_player(player) {
+function visual_command_effect_clear_player(player, on_output) {
   let form = new ActionFormData()
   let actions = []
 
@@ -7439,7 +7467,7 @@ function visual_command_effect_clear_player(player) {
 
 
   if (world.getAllPlayers().length === 1) {
-    return visual_command_effect_clear_config(player, world.getAllPlayers()[0]);
+    return visual_command_effect_clear_config(player, world.getAllPlayers()[0], on_output);
   }
 
   for (const selected_player of world.getAllPlayers()) {
@@ -7447,7 +7475,7 @@ function visual_command_effect_clear_player(player) {
       if (player.getEffect(effectType)) {
         form.button(selected_player.name, "textures/ui/lan_icon");
         actions.push(() => {
-          return visual_command_effect_clear_config(player, selected_player)
+          return visual_command_effect_clear_config(player, selected_player, on_output)
         });
         break;
       }
@@ -7457,7 +7485,7 @@ function visual_command_effect_clear_player(player) {
   form.divider()
   form.button("");
   actions.push(() => {
-    return visual_command_effect_select(player)
+    return visual_command_effect_select(player, on_output)
   });
 
 
@@ -7471,7 +7499,7 @@ function visual_command_effect_clear_player(player) {
   });
 }
 
-function visual_command_effect_clear_config(player, target) {
+function visual_command_effect_clear_config(player, target, on_output) {
   let form = new ActionFormData();
   const save_data = load_save_data();
   const player_sd_index = save_data.findIndex(e => e.id === player.id);
@@ -7482,6 +7510,8 @@ function visual_command_effect_clear_config(player, target) {
 
   if (EffectTypes.getAll().filter(e => target.getEffect(e)).length == 1) {
     const command = `/effect "${target.name}" clear`;
+    const output = { command };
+    if (typeof on_output === "function") return on_output(output);
 
     return save_data[player_sd_index].quick_run
       ? execute_command(player, command, player)
@@ -7492,6 +7522,8 @@ function visual_command_effect_clear_config(player, target) {
     form.button("All effects", "textures/ui/store_sort_icon");
     actions.push(() => {
       const command = `/effect "${target.name}" clear`;
+      const output = { command };
+      if (typeof on_output === "function") return on_output(output);
 
       save_data[player_sd_index].quick_run
         ? execute_command(player, command, player)
@@ -7520,6 +7552,8 @@ function visual_command_effect_clear_config(player, target) {
 
       actions.push(() => {
         const command = `/effect "${target.name}" clear ${id}`;
+        const output = { command };
+        if (typeof on_output === "function") return on_output(output);
 
         save_data[player_sd_index].quick_run
           ? execute_command(player, command, player)
@@ -7529,7 +7563,7 @@ function visual_command_effect_clear_config(player, target) {
 
   form.divider();
   form.button(""); // Zurück-Button
-  actions.push(() => visual_command_effect_select(player));
+  actions.push(() => visual_command_effect_select(player, on_output));
 
   form.show(player).then((response) => {
     if (response.selection === undefined) return -1;
@@ -7537,7 +7571,7 @@ function visual_command_effect_clear_config(player, target) {
   });
 }
 
-function visual_command_effect_add(player) {
+function visual_command_effect_add(player, on_output) {
   let form = new ActionFormData()
   let actions = []
 
@@ -7559,7 +7593,7 @@ function visual_command_effect_add(player) {
       } else {
         form.button(humanizeId(id));
       }
-      actions.push(() => visual_command_effect_config(player, id));
+      actions.push(() => visual_command_effect_config(player, id, on_output));
     }
   });
 
@@ -7567,9 +7601,9 @@ function visual_command_effect_add(player) {
   form.button("");
   actions.push(() => {
     if (anyplayerHasEffect()) {
-      return visual_command_effect_select(player)
+      return visual_command_effect_select(player, on_output)
     }
-    return visual_command(player)
+    return visual_command(player, on_output)
   });
 
 
@@ -7583,7 +7617,7 @@ function visual_command_effect_add(player) {
   });
 }
 
-function visual_command_effect_config(player, id) {
+function visual_command_effect_config(player, id, on_output) {
   const form = new ModalFormData();
   const save_data = load_save_data();
   const player_sd_index = save_data.findIndex(e => e.id === player.id);
@@ -7620,6 +7654,8 @@ function visual_command_effect_config(player, id) {
     const hideFlag = hideParticles ? "true" : "false";
 
     const command = `/effect "${targetName}" ${id} ${durationValue} ${effectLevel} ${hideFlag}`;
+    const output = { command };
+    if (typeof on_output === "function") return on_output(output);
 
     save_data[player_sd_index].quick_run
       ? execute_command(player, command, player)
@@ -7632,7 +7668,7 @@ function visual_command_effect_config(player, id) {
  visual_command: Time
 -------------------------*/
 
-function visual_command_time(player) {
+function visual_command_time(player, on_output) {
   const form = new ActionFormData();
   const actions = [];
   const saveData = load_save_data();
@@ -7650,16 +7686,19 @@ function visual_command_time(player) {
     { label: "Night\n§919:00 o'clock",    icon: "textures/ui/time_5night", cmd: "/time set 13000" }
   ].forEach(opt => {
     form.button(opt.label, opt.icon);
-    actions.push(() => saveData[idx].quick_run
-      ? execute_command(player, opt.cmd, player)
-      : command_menu(player, opt.cmd)
-    );
+    actions.push(() => {
+      const output = { command: opt.cmd };
+      if (typeof on_output === "function") return on_output(output);
+      return saveData[idx].quick_run
+        ? execute_command(player, opt.cmd, player)
+        : command_menu(player, opt.cmd);
+    });
   });
 
   // Back button
   form.divider()
   form.button("");
-  actions.push(() => visual_command(player));
+  actions.push(() => visual_command(player, on_output));
 
   form.show(player).then(resp => {
     if (resp.selection != null && actions[resp.selection]) {
@@ -7672,7 +7711,7 @@ function visual_command_time(player) {
  visual_command: gamemode
 -------------------------*/
 
-function visual_command_gamemode(player) {
+function visual_command_gamemode(player, on_output) {
   const form = new ActionFormData();
   const actions = [];
   const saveData = load_save_data();
@@ -7723,10 +7762,13 @@ function visual_command_gamemode(player) {
   if (pinned.length > 0) {
     pinned.forEach(opt => {
       form.button(opt.label, opt.icon);
-      actions.push(() => saveData[idx].quick_run
-        ? execute_command(player, opt.cmd, player)
-        : command_menu(player, opt.cmd)
-      );
+      actions.push(() => {
+        const output = { command: opt.cmd };
+        if (typeof on_output === "function") return on_output(output);
+        return saveData[idx].quick_run
+          ? execute_command(player, opt.cmd, player)
+          : command_menu(player, opt.cmd);
+      });
     });
 
     // Divider zwischen Pins und Rest falls Rest existiert
@@ -7736,16 +7778,19 @@ function visual_command_gamemode(player) {
   // Restliche Items
   others.forEach(opt => {
     form.button(opt.label, opt.icon);
-    actions.push(() => saveData[idx].quick_run
-      ? execute_command(player, opt.cmd, player)
-      : command_menu(player, opt.cmd)
-    );
+    actions.push(() => {
+      const output = { command: opt.cmd };
+      if (typeof on_output === "function") return on_output(output);
+      return saveData[idx].quick_run
+        ? execute_command(player, opt.cmd, player)
+        : command_menu(player, opt.cmd);
+    });
   });
 
   // Zurück-Button
   form.divider();
   form.button("");
-  actions.push(() => visual_command(player));
+  actions.push(() => visual_command(player, on_output));
 
   // Formular anzeigen und ausgewählte Aktion ausführen
   form.show(player).then(resp => {

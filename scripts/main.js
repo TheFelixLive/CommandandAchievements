@@ -1,19 +1,19 @@
-import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus} from "@minecraft/server";
+﻿import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus} from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/server-ui"
 
 
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0",
-  build: "B047",
+  build: "B048",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778764433185,
+  unix: 1778769520176,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      // "Readded /tp, /camera & /execute command"
+      "Readded /tp, /camera & /execute command",
       "Added /seed command to get the world seed",
       // "Visual Commands for chains"
     ],
@@ -23,6 +23,7 @@ const version_info = {
     // bug_fixes
     bug_fixes: [
       // "Fixing some bugs related to admins being no able to use there rights to on realms",
+      "Fixed a bug which crashed the addon when trying to insert an undefined location with the visual command menu",
     ]
   }
 }
@@ -824,6 +825,7 @@ const command_list = [
         options: [
           {
             name: "toEntity",
+            emit: false,
             syntaxes: [
               { type: "entityselector", name: "destination" },
               { type: "bool", name: "checkForBlocks", optional: true }
@@ -831,6 +833,7 @@ const command_list = [
           },
           {
             name: "toLocation",
+            emit: false,
             syntaxes: [
               { type: "location", name: "destination" },
               { type: "float", name: "yRot", optional: true },
@@ -840,6 +843,7 @@ const command_list = [
           },
           {
             name: "toLocationFacingPosition",
+            emit: false,
             syntaxes: [
               { type: "location", name: "destination" },
               { type: "float", name: "yRot", optional: true },
@@ -851,6 +855,7 @@ const command_list = [
           },
           {
             name: "toLocationFacingEntity",
+            emit: false,
             syntaxes: [
               { type: "location", name: "destination" },
               { type: "float", name: "yRot", optional: true },
@@ -1388,11 +1393,10 @@ const command_list = [
       { type: "literal", value: "execute" },
       {
         type: "repeat",
-        min: 0,
         syntaxes: [
           {
             type: "choice",
-            name: "execute_clause",
+            name: "ExecuteChainedOption",
             options: [
               { name: "as", syntaxes: [{ type: "entityselector", name: "targets" }] },
               { name: "at", syntaxes: [{ type: "entityselector", name: "targets" }] },
@@ -1446,10 +1450,10 @@ const command_list = [
                     type: "choice",
                     name: "if_mode",
                     options: [
-                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }] },
-                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }] },
-                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }] },
-                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }] }
+                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }, { type: "can_exit_loop" }] },
+                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }, { type: "can_exit_loop" }] },
+                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }, { type: "can_exit_loop" }] },
+                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }, { type:"can_exit_loop" }] }
                     ]
                   }
                 ]
@@ -1461,41 +1465,25 @@ const command_list = [
                     type: "choice",
                     name: "unless_mode",
                     options: [
-                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }] },
-                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }] },
-                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }] },
-                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }] }
+                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }, { type: "can_exit_loop" }] },
+                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }, { type: "can_exit_loop" }] },
+                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }, { type: "can_exit_loop" }] },
+                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }, { type: "can_exit_loop" }] }
                     ]
                   }
                 ]
               },
               {
-                name: "store",
+                name: "run",
                 syntaxes: [
-                  {
-                    type: "choice",
-                    name: "store_mode",
-                    options: [
-                      { name: "result", syntaxes: [] },
-                      { name: "success", syntaxes: [] }
-                    ]
-                  },
-                  {
-                    type: "choice",
-                    name: "store_target",
-                    options: [
-                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "objective" }] },
-                      { name: "bossbar", syntaxes: [{ type: "string", name: "id" }, { type: "choice", name: "bossbar_field", options: [{ name: "value", syntaxes: [] }, { name: "max", syntaxes: [] }] }] }
-                    ]
-                  }
+                  { type: "exit_loop" },
+                  { type: "command_tail", name: "command" }
                 ]
               }
             ]
           }
         ]
-      },
-      { type: "choice", name: "run_keyword", options: [{ name: "run", syntaxes: [] }] },
-      { type: "command_tail", name: "command" }
+      }
     ]
   },
 
@@ -2706,12 +2694,12 @@ const command_list = [
         name: "action",
         value: [
           {
-            value: "start",
+            value: "add",
             next: [
-              { type: "playerselector", name: "targets", optional: true },
-              { type: "float", name: "amplitude" },
+              { type: "playerselector", name: "targets" },
+              { type: "float", name: "amplitude", optional: true },
               { type: "int", name: "durationTicks" },
-              { type: "string", name: "source", optional: true }
+              { type: "choice", name: "shakeType", value: [{ value: "rotational" }, { value: "positional" } ], optional: true }
             ]
           },
           {
@@ -4651,21 +4639,36 @@ async function menu_location_input(player, input) {
 
   let skipped = input.optional ? response.formValues[5] : false;
 
-  // "Insuring a Location" toggled -> close menu and return current location as response
+  // "Inserting a location" toggled -> close menu and return current location as response
   if (response.formValues[4] && !skipped) {
       let block;
       while (!player.isSneaking) {
-        block = player.getBlockFromViewDirection().block
-
-        player.onScreenDisplay.setActionBar(block.location.x + ", " + block.location.y + ", " + block.location.z + " - sneak to confirm");
+        const hit = player.getBlockFromViewDirection();
+        block = hit?.block;
+        const x = block?.location?.x ?? 0;
+        const y = block?.location?.y ?? 0;
+        const z = block?.location?.z ?? 0;
+        if (x !== 0 || y !== 0 || z !== 0) {
+          player.onScreenDisplay.setActionBar(`${x}, ${y}, ${z} - sneak to confirm`);
+        } else {
+          player.onScreenDisplay.setActionBar(`undefined - sneak to return to menu`);
+        }
         await system.waitTicks(1);
       }
 
+      const x = block?.location?.x;
+      const y = block?.location?.y;
+      const z = block?.location?.z;
+      if (x == null || y == null || z == null) {
+        player.onScreenDisplay.setActionBar("");
+        return menu_location_input(player, input);
+      }
+      player.onScreenDisplay.setActionBar("");
       return {
         response: {
-          x: Math.floor(block.location.x),
-          y: Math.floor(block.location.y),
-          z: Math.floor(block.location.z)
+          x: Math.floor(x),
+          y: Math.floor(y),
+          z: Math.floor(z)
         },
         canceled: false,
         skipped: false
@@ -4696,7 +4699,9 @@ async function menu_actions_input(player, input) {
   form.button("");
 
   const response = await form.show(player);
-  if (response.isCanceled) return -1;
+  if (response?.isCanceled || response?.canceled || response?.selection === undefined) {
+    return { response: null, skipped: false, canceled: true };
+  }
 
   return {
     response:
@@ -4901,7 +4906,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
       continue;
     }
 
-    if (syn.type === "choice" || syn.type === "repeat" || syn.type === "command_tail") {
+    if (syn.type === "choice" || syn.type === "repeat" || syn.type === "command_tail" || syn.type === "exit_loop" || syn.type === "can_exit_loop") {
       system.run(() => print(`Syntax-Element 'choice' in command '${cmd.name}' wird nicht in CustomCommandParamType abgebildet.`));
       continue;
     }
@@ -5239,6 +5244,15 @@ function fixSyntax(parts, syntaxList, index = 0) {
       fixedParts.push(parts.slice(index).join(" "));
       index = parts.length;
       break;
+    }
+
+    if (syntax.type === "exit_loop") {
+      // UI-only marker for repeat loops: no token consumption in text parsing.
+      continue;
+    }
+    if (syntax.type === "can_exit_loop") {
+      // UI-only marker for repeat loops: no token consumption in text parsing.
+      continue;
     }
 
     if (syntax.type === "repeat") {
@@ -5852,7 +5866,16 @@ function main_menu(player) {
 
     form.button("Run a command", "textures/ui/color_plus");
     actions.push(() => {
-      visual_command(player);
+      let output = visual_command(player);
+
+      if (save_data[player_sd_index].quick_run) {
+        execute_command(player, output.command);
+        if (output.menu) {
+          output.menu();
+        }
+      } else {
+        command_menu(player, output.command, null);
+      }
     });
 
     if (canPlayerUseChains(player)) {
@@ -6595,7 +6618,7 @@ function chain_edit(player, chainIndex, setup = false) {
       if (chain.commands.length == 0) {
         save_data[player_sd_index].chain_commands.splice(chainIndex, 1);
         update_save_data(save_data);
-        visual_command(player);
+        chain_overview(player);
       } else {
         let confirmForm = new MessageFormData();
         confirmForm.title("Delete Chain");
@@ -6607,7 +6630,7 @@ function chain_edit(player, chainIndex, setup = false) {
           if (confirmResponse.selection === 0) {
             save_data[player_sd_index].chain_commands.splice(chainIndex, 1);
             update_save_data(save_data);
-            visual_command(player);
+            chain_overview(player);
           } else {
             chain_edit(player, chainIndex, setup);
           }
@@ -6922,229 +6945,226 @@ async function visual_command_generic(player, cmd) {
   }
 
   async function processParts(parts) {
+    let requestRepeatExit = false;
+    let canExitLoop = false;
+
     for (const part of parts) {
       if (part.type === "literal") {
         appendToken(String(part.value || "").replace(/^\/+/, ""));
-
-      } else if (part.type === "command_tail") {
+        continue;
+      }
+      if (part.type === "exit_loop") {
+        requestRepeatExit = true;
+        continue;
+      }
+      if (part.type === "can_exit_loop") {
+        canExitLoop = true;
+        continue;
+      }
+      if (part.type === "command_tail") {
         let result = await menu_text_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Enter command: ` + (part.name || "command"),
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
-
-      } else if (part.type === "repeat") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "repeat") {
         const repeatParts = Array.isArray(part.syntaxes) ? part.syntaxes : [];
-        const max = Number.isFinite(+part.max) ? +part.max : 12;
+        const min = Number.isFinite(+part.min) ? +part.min : 0;
+        const max = Number.isFinite(+part.max) ? +part.max : 999;
         let count = 0;
-        while (count < max) {
-          const cont = await menu_actions_input(player, {
-            title: "Visual commands - " + cmd.name,
-            prompt: `Add ${part.name || "another clause"}?`,
-            actions: [{ id: "yes", name: "Add" }, { id: "no", name: "Continue" }],
-            optional: false
-          });
-          if (cont.canceled) return { canceled: true };
-          if (cont.response !== "yes") break;
-          const nestedRes = await processParts(repeatParts);
-          if (nestedRes && nestedRes.canceled) return { canceled: true };
-          count++;
-        }
+        let repeatCanExit = false;
+        const singleChoice = repeatParts.length === 1 && repeatParts[0]?.type === "choice" ? repeatParts[0] : null;
 
-      } else if (part.type === "location") {
+        while (count < max) {
+          if (singleChoice) {
+            const options = Array.isArray(singleChoice.options) ? singleChoice.options : (Array.isArray(singleChoice.value) ? singleChoice.value : []);
+            const actions = options.map((option, idx) => ({
+              id: option.name || option.value || `choice_option_${idx}`,
+              name: option.name || option.value || `Option ${idx + 1}`
+            }));
+
+            const pick = await menu_actions_input(player, {
+              title: "Visual commands - " + cmd.name,
+              prompt: `Choose option for ${singleChoice.name || part.name || "loop"}`,
+              actions,
+              optional: count >= min && repeatCanExit
+            });
+            if (pick.canceled) return { canceled: true };
+            if (pick.skipped) break;
+            if (pick.response === "__exit_repeat__") break;
+
+            const selectedOption = options.find((option, idx) => (option.name || option.value || `choice_option_${idx}`) === pick.response);
+            if (!selectedOption || selectedOption.emit !== false) appendToken(pick.response);
+
+            const nestedSyntaxes = Array.isArray(selectedOption?.syntaxes) ? selectedOption.syntaxes : (Array.isArray(selectedOption?.next) ? selectedOption.next : []);
+            if (nestedSyntaxes.length) {
+              const nestedRes = await processParts(nestedSyntaxes);
+              if (nestedRes?.canceled) return { canceled: true };
+              if (nestedRes?.canExitLoop) repeatCanExit = true;
+              if (nestedRes?.requestRepeatExit && count + 1 >= min && repeatCanExit) {
+                count++;
+                break;
+              }
+            }
+            count++;
+            continue;
+          }
+
+          const nestedRes = await processParts(repeatParts);
+          if (nestedRes?.canceled) return { canceled: true };
+          if (nestedRes?.canExitLoop) repeatCanExit = true;
+          count++;
+          if (nestedRes?.requestRepeatExit && count >= min && repeatCanExit) break;
+          if (count >= min && repeatCanExit) {
+            const cont = await menu_actions_input(player, {
+              title: "Visual commands - " + cmd.name,
+              prompt: `Add ${part.name || "another clause"}?`,
+              actions: [{ id: "yes", name: "Add" }, { id: "no", name: "Finish / Exit" }],
+              optional: false
+            });
+            if (cont.canceled) return { canceled: true };
+            if (cont.response !== "yes") break;
+          }
+        }
+        if (repeatCanExit) canExitLoop = true;
+        continue;
+      }
+
+      if (part.type === "location") {
         let result = await menu_location_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Enter Location: ` + part.name,
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          const { x, y, z } = result.response;
-          appendToken(`${x} ${y} ${z}`);
-        }
-
-      } else if (part.type === "blocktype") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        const { x, y, z } = result.response;
+        appendToken(`${x} ${y} ${z}`);
+        continue;
+      }
+      if (part.type === "blocktype") {
         let result = await menu_text_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Enter blocktype: ` + part.name,
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
-
-      } else if (part.type === "bool") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "bool") {
         let result = await menu_actions_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: part.name + "?",
-          actions: [{id: "true", name: "Yes"}, {id: "false", name: "No"}],
+          actions: [{ id: "true", name: "Yes" }, { id: "false", name: "No" }],
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
-
-      } else if (part.type === "weatherType") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "weatherType") {
         const actions = [
-          {
-            id: "clear",
-            name: "Sunny (clear)",
-            icon: "textures/ui/weather_clear"
-          },
-          {
-            id: "rain",
-            name: "Rain",
-            icon: "textures/ui/weather_rain"
-          },
-          {
-            id: "thunder",
-            name: "Thunderstorms",
-            icon: "textures/ui/weather_thunderstorm"
-          }
+          { id: "clear", name: "Sunny (clear)", icon: "textures/ui/weather_clear" },
+          { id: "rain", name: "Rain", icon: "textures/ui/weather_rain" },
+          { id: "thunder", name: "Thunderstorms", icon: "textures/ui/weather_thunderstorm" }
         ];
-
         let result = await menu_actions_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: "Which weather do you want?",
           actions,
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-
-          // id direkt für den Command nutzen
-          appendToken(result.response);
-          // oder z. B.: appendToken("/weather " + result.response);
-        }
-      } else if (part.type === "playerselector") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "playerselector") {
         let result = await menu_actions_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Select a player: ` + part.name,
-          actions: world.getAllPlayers().map(p => ({
-            value: p.name,
-            icon: "textures/ui/lan_icon"
-          })),
+          actions: world.getAllPlayers().map(p => ({ value: p.name, icon: "textures/ui/lan_icon" })),
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
-      } else if (part.type === "choice") {
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "choice") {
         const options = Array.isArray(part.options) ? part.options : (Array.isArray(part.value) ? part.value : []);
         if (!options.length) continue;
-
         const actions = options.map((option, idx) => ({
           id: option.name || option.value || `choice_option_${idx}`,
           name: option.name || option.value || `Option ${idx + 1}`
         }));
-
         let result = await menu_actions_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `Choose option for ${part.name || "choice"}`,
           actions,
           optional: part.optional || false
         });
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
 
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-          const selectedOption = options.find((option, idx) => (option.name || option.value || `choice_option_${idx}`) === result.response);
-          const nestedSyntaxes = Array.isArray(selectedOption?.syntaxes) ? selectedOption.syntaxes : (Array.isArray(selectedOption?.next) ? selectedOption.next : []);
-          if (nestedSyntaxes.length) {
-            const nestedRes = await processParts(nestedSyntaxes);
-            if (nestedRes && nestedRes.canceled) return { canceled: true };
-          }
+        const selectedOption = options.find((option, idx) => (option.name || option.value || `choice_option_${idx}`) === result.response);
+        if (!selectedOption || selectedOption.emit !== false) appendToken(result.response);
+        const nestedSyntaxes = Array.isArray(selectedOption?.syntaxes) ? selectedOption.syntaxes : (Array.isArray(selectedOption?.next) ? selectedOption.next : []);
+        if (nestedSyntaxes.length) {
+          const nestedRes = await processParts(nestedSyntaxes);
+          if (nestedRes?.canceled) return { canceled: true };
+          if (nestedRes?.requestRepeatExit) requestRepeatExit = true;
+          if (nestedRes?.canExitLoop) canExitLoop = true;
         }
-      } else if (part.type === "entityType") {
+        continue;
+      }
+      if (part.type === "entityType") {
         const actions = EntityTypes.getAll()
           .sort((a, b) => a.id.localeCompare(b.id))
           .map(e => {
-            const id = e.id.replace(/^minecraft:/, ""); // ohne namespace
-
-            // Blockliste prüfen — überspringen, falls geblockt
+            const id = e.id.replace(/^minecraft:/, "");
             if (entity_blocklist.find(entity => entity.id == id)) return null;
-
-            // Standard-Icon, mit Ausnahme-Liste überschreiben falls vorhanden
             let icon = "textures/items/spawn_eggs/spawn_egg_" + id;
-            if (entity_exceptionlist[id]) {
-              icon = entity_exceptionlist[id].icon;
-            }
-
-            // Name als rawtext-Objekt wie gewünscht
+            if (entity_exceptionlist[id]) icon = entity_exceptionlist[id].icon;
             const name = { rawtext: [{ translate: "entity." + id + ".name" }] };
-
             return { id, name, icon };
           })
-          .filter(Boolean); // null-Einträge entfernen
-
+          .filter(Boolean);
         let result = await menu_actions_input(player, {
           title: "Visual commands - " + cmd.name,
           prompt: `What entity do you mean for ` + part.name,
-          actions: actions,
+          actions,
           optional: part.optional || false
         });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
-      } else {
-        let result = await menu_text_input(player, {
-          title: "Visual commands - " + cmd.name,
-          prompt: `Enter ${part.type}: ` + part.name,
-          optional: part.optional || false
-        });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-          appendToken(result.response);
-        }
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
       }
+
+      let result = await menu_text_input(player, {
+        title: "Visual commands - " + cmd.name,
+        prompt: `Enter ${part.type}: ` + part.name,
+        optional: part.optional || false
+      });
+      if (result.skipped) break;
+      if (result.canceled) return { canceled: true };
+      appendToken(result.response);
     }
-    return { ok: true };
+    return { ok: true, requestRepeatExit, canExitLoop };
   }
 
-  // starte Verarbeitung der Haupt-Syntax
   const result = await processParts(cmd.syntaxes);
+  if (result && result.canceled) return visual_command(player);
 
-  if (result && result.canceled) {
-    return visual_command(player);
-  }
-
-  // Wenn processParts signalisierte, dass wir direkt ausführen sollen (executeNow),
-  // oder ganz normal das Ende erreicht wurde, führen wir das Kommando aus.
-  // (executeNow und normale Ende verhalten sich gleich: sofortige Ausführung)
   save_data[player_sd_index].quick_run
     ? execute_command(player, fullCommand)
     : command_menu(player, fullCommand);

@@ -4,51 +4,25 @@ import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/serv
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.7.0.0",
-  build: "B046",
-  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1775411647954,
+  version: "v.7.1.0",
+  build: "B047",
+  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1778764433185,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Chains can now be accessed & executed with custom commands",
-      "History can now be accessed with custom commands",
-      "Settings can now be accessed with custom commands",
-      "Added support for icons in chain commands",
-      "Added location insertion for visual command menu",
-      "Rebranded Gesture settings to Shortcuts",
-      "Restructured the main menu layout",
-      "Restructured the Permission menu",
-      "Added a new Storage menu to view and manage save data",
-      "Added a dynamic log system",
-      // Readd /tp, /camera & /execute command
+      // "Readded /tp, /camera & /execute command"
+      "Added /seed command to get the world seed",
+      // "Visual Commands for chains"
     ],
     // general_changes
     general_changes: [
-      // Add parallel syntaxes
-      "Added Categories for commands",
-      "The Main menu can now be disabled by administrators",
-      "Chains can now be disabled by administrators",
-      "Main Menu preferences can now be viewed and managed by administrators",
-      "Improved the logic for command syntax fixing.",
-      "Chains now appear in the history list.",
-      "Client Information in the Permission menu is now more detailed and better organized",
-      "SD-Console dumps are now available for all release types",
-      "The About menu is now Host only.",
-      "Readded Update message"
     ],
     // bug_fixes
     bug_fixes: [
-      "Fixed /structure command not working properly due to a wrong syntax structure",
-      "Fixed weather visual command not working properly due to a wrong parameter type",
-      "Fixed the visual enchant command, which wouldn't close the menu properly with quick run enabled",
-      "Custom commands executed by other entities contains a failed message",
-      "Fixed missing title in the allowed commands menu",
-      "Fixed BlockTypes, EntityTypes & ItemTypes not working properly in custom command",
-      "Fixed Online time of players not updating properly in the permission menu",
-      "Fixed a bug where some help messages wouldn't appear",
+      // "Fixing some bugs related to admins being no able to use there rights to on realms",
     ]
   }
 }
@@ -485,7 +459,7 @@ const entity_blocklist = [
   {
     id: "balloon"
   },
-    {
+  {
     id: "ice_bomb"
   }
 ]
@@ -587,7 +561,7 @@ const command_categories = [
 ]
 
 const command_list = [
-  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, enum, (gameruletype)
+  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, choice, repeat, command_tail, (gameruletype)
 
   {
     name: "agent",
@@ -596,23 +570,24 @@ const command_list = [
     textures: "textures/items/spawn_eggs/spawn_egg_agent",
     category: 0,
     syntaxes: [
-      { type: "literal", value: "/agent" },
+      { type: "literal", value: "agent" },
 
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "create"
+            name: "create",
+            syntaxes: []
           },
           {
-            value: "remove"
+            name: "remove",
+            syntaxes: []
           },
           {
-            value: "move",
-            next: [
+            name: "move",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 value: [
                   { value: "forward" },
@@ -627,10 +602,10 @@ const command_list = [
           },
 
           {
-            value: "turn",
-            next: [
+            name: "turn",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "turnDirection",
                 value: [
                   { value: "left" },
@@ -641,10 +616,10 @@ const command_list = [
           },
 
           {
-            value: "attack",
-            next: [
+            name: "attack",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 value: [
                   { value: "forward" },
@@ -656,10 +631,10 @@ const command_list = [
           },
 
           {
-            value: "destroy",
-            next: [
+            name: "destroy",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 value: [
                   { value: "forward" },
@@ -671,11 +646,11 @@ const command_list = [
           },
 
           {
-            value: "place",
-            next: [
+            name: "place",
+            syntaxes: [
               { type: "int", name: "slotNum" },
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 value: [
                   { value: "forward" },
@@ -687,19 +662,19 @@ const command_list = [
           },
 
           {
-            value: "collect",
-            next: [
+            name: "collect",
+            syntaxes: [
               { type: "itemtype", name: "item" }
             ]
           },
 
           {
-            value: "drop",
-            next: [
+            name: "drop",
+            syntaxes: [
               { type: "int", name: "slotNum" },
               { type: "int", name: "quantity", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 optional: true,
                 value: [
@@ -712,8 +687,8 @@ const command_list = [
           },
 
           {
-            value: "transfer",
-            next: [
+            name: "transfer",
+            syntaxes: [
               { type: "int", name: "srcSlotNum" },
               { type: "int", name: "quantity" },
               { type: "int", name: "dstSlotNum" }
@@ -721,10 +696,10 @@ const command_list = [
           },
 
           {
-            value: "inspect",
-            next: [
+            name: "inspect",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "direction",
                 value: [
                   { value: "forward" },
@@ -736,12 +711,13 @@ const command_list = [
           },
 
           {
-            value: "getposition"
+            name: "getposition",
+            syntaxes: []
           },
 
           {
-            value: "tp",
-            next: [
+            name: "tp",
+            syntaxes: [
               { type: "location", name: "coordinates" }
             ]
           }
@@ -757,23 +733,22 @@ const command_list = [
     description: "Fill area with blocks",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/fill" },
+      { type: "literal", value: "fill" },
       { type: "location", name: "from" },
       { type: "location", name: "to" },
       { type: "blocktype", name: "block" },
+      { type: "int", name: "data", optional: true },
       {
-        type: "enum",
-        name: "mode",
-        optional: true,
-        value: [
-          { value: "destroy" },
-          { value: "hollow" },
-          { value: "keep" },
-          { value: "outline" },
+        type: "choice",
+        options: [
+          { name: "destroy", syntaxes: [] },
+          { name: "hollow", syntaxes: [] },
+          { name: "keep", syntaxes: [] },
+          { name: "outline", syntaxes: [] },
           {
-            value: "replace",
-            next: [
-              { type: "blocktype", name: "oldBlock"}
+            name: "replace",
+            syntaxes: [
+              { type: "blocktype", name: "oldBlock", optional: true }
             ]
           }
         ]
@@ -794,7 +769,7 @@ const command_list = [
     vc_available: (player) => true,
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/effect" },
+      { type: "literal", value: "effect" },
       { type: "entityselector", name: "target" },
       { type: "effecttype", name: "effect" },
       { type: "int", name: "seconds", optional: true },
@@ -811,7 +786,7 @@ const command_list = [
     textures: "textures/items/diamond_sword",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/give" },
+      { type: "literal", value: "give" },
       { type: "playerselector", name: "target" },
       { type: "itemtype", name: "item" },
       { type: "int", name: "count", optional: true },
@@ -827,14 +802,13 @@ const command_list = [
     textures: "textures/items/spawn_eggs/spawn_egg_creeper",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/summon" },
+      { type: "literal", value: "summon" },
       { type: "entityType", name: "entityType" },
       { type: "location", name: "pos", optional: true },
       { type: "json", name: "components", optional: true }
     ]
   },
 
-  /* // Disabled teleport & camera command for now since both of them require parallel syntaxes (multiple types at ones have to be valid) which are not yet supported!
   {
     name: "teleport",
     recommended: (player) => isFarthestPlayerFarAway(player, 300),
@@ -843,34 +817,47 @@ const command_list = [
     textures: "textures/ui/dressing_room_skins",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/teleport" },
+      { type: "literal", value: "teleport" },
+      { type: "entityselector", name: "victim" },
       {
-        type: "entityselector",
-        name: "victim",
-        next: [
+        type: "choice",
+        options: [
           {
-            type: "entityselector",
-            name: "destination",
-            next: [
+            name: "toEntity",
+            syntaxes: [
+              { type: "entityselector", name: "destination" },
               { type: "bool", name: "checkForBlocks", optional: true }
             ]
           },
           {
-            type: "location",
-            name: "destination",
-            next: [
+            name: "toLocation",
+            syntaxes: [
+              { type: "location", name: "destination" },
+              { type: "float", name: "yRot", optional: true },
+              { type: "float", name: "xRot", optional: true },
+              { type: "bool", name: "checkForBlocks", optional: true }
+            ]
+          },
+          {
+            name: "toLocationFacingPosition",
+            syntaxes: [
+              { type: "location", name: "destination" },
               { type: "float", name: "yRot", optional: true },
               { type: "float", name: "xRot", optional: true },
               { type: "bool", name: "checkForBlocks", optional: true },
-              {
-                type: "enum",
-                value: "facing",
-                optional: true,
-                next: [
-                  { type: "location", name: "lookAtPosition", optional: true },
-                  { type: "entityselector", name: "lookAtEntity", optional: true }
-                ]
-              }
+              { type: "literal", value: "facing" },
+              { type: "location", name: "lookAtPosition" }
+            ]
+          },
+          {
+            name: "toLocationFacingEntity",
+            syntaxes: [
+              { type: "location", name: "destination" },
+              { type: "float", name: "yRot", optional: true },
+              { type: "float", name: "xRot", optional: true },
+              { type: "bool", name: "checkForBlocks", optional: true },
+              { type: "literal", value: "facing" },
+              { type: "entityselector", name: "lookAtEntity" }
             ]
           }
         ]
@@ -884,20 +871,76 @@ const command_list = [
     description: "Control camera",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/camera" },
+      { type: "literal", value: "camera" },
       { type: "playerselector", name: "targets" },
-
-      // Hauptaktionen als enum; jede Aktion kann eigene Next-Parameter haben
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
+          // attach_to_entity
           {
-            value: "set",
-            next: [
-              // preset name (CameraPresets)
+            name: "attach_to_entity",
+            syntaxes: [
+              { type: "entityselector", name: "target" },
+            ]
+          },
+
+          // Clear
+          {
+            name: "clear",
+            syntaxes: []
+          },
+
+          // detach_from_entity
+          {
+            name: "detach_from_entity",
+            syntaxes: []
+          },
+
+          // Fade
+          {
+            name: "fade",
+            optional: true,
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
+                options: [
+                  {
+                    value: "time",
+                    next: [
+                      { type: "float", name: "fadeInSeconds" },
+                      { type: "float", name: "holdSeconds" },
+                      { type: "float", name: "fadeOutSeconds" },
+
+                      { type: "int", name: "red", optional: true},
+                      { type: "int", name: "green" },
+                      { type: "int", name: "blue" }
+
+                    ]
+                  },
+                  {
+                    value: "color",
+                    next: [
+                      { type: "int", name: "red" },
+                      { type: "int", name: "green" },
+                      { type: "int", name: "blue" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          // remove_target
+          {
+            name: "remove_target",
+            syntaxes: []
+          },
+
+          // Set
+          {
+            name: "set",
+            syntaxes: [
+              {
+                type: "choice",
                 name: "preset",
                 value: [
                   { value: "minecraft:first_person" },
@@ -906,34 +949,55 @@ const command_list = [
                   { value: "minecraft:free" },
                   { value: "minecraft:third_person" },
                   { value: "minecraft:third_person_front" },
-                  { value: "minecraft:control_scheme_camera" }
                 ]
               },
-
-              // optional: ease <easeTime: float> <easeType: Easing>
               {
+                type: "literal",
                 value: "ease",
                 optional: true,
                 next: [
                   { type: "float", name: "easeTime" },
                   {
-                    type: "enum",
+                    type: "choice",
                     name: "easing",
+                    optional: true,
                     value: [
-                      { value: "linear" },{ value: "spring" },{ value: "in_quad" },{ value: "out_quad" },
-                      { value: "in_out_quad" },{ value: "in_cubic" },{ value: "out_cubic" },{ value: "in_out_cubic" },
-                      { value: "in_quart" },{ value: "out_quart" },{ value: "in_out_quart" },{ value: "in_quint" },
-                      { value: "out_quint" },{ value: "in_out_quint" },{ value: "in_sine" },{ value: "out_sine" },
-                      { value: "in_out_sine" },{ value: "in_expo" },{ value: "out_expo" },{ value: "in_out_expo" },
-                      { value: "in_circ" },{ value: "out_circ" },{ value: "in_out_circ" },{ value: "in_bounce" },
-                      { value: "out_bounce" },{ value: "in_out_bounce" },{ value: "in_back" },{ value: "out_back" },
-                      { value: "in_out_back" },{ value: "in_elastic" },{ value: "out_elastic" },{ value: "in_out_elastic" }
+                      { value: "linear" },
+                      { value: "spring" },
+                      { value: "in_quad" },
+                      { value: "out_quad" },
+                      { value: "in_out_quad" },
+                      { value: "in_cubic" },
+                      { value: "out_cubic" },
+                      { value: "in_out_cubic" },
+                      { value: "in_quart" },
+                      { value: "out_quart" },
+                      { value: "in_out_quart" },
+                      { value: "in_quint" },
+                      { value: "out_quint" },
+                      { value: "in_out_quint" },
+                      { value: "in_sine" },
+                      { value: "out_sine" },
+                      { value: "in_out_sine" },
+                      { value: "in_expo" },
+                      { value: "out_expo" },
+                      { value: "in_out_expo" },
+                      { value: "in_circ" },
+                      { value: "out_circ" },
+                      { value: "in_out_circ" },
+                      { value: "in_bounce" },
+                      { value: "out_bounce" },
+                      { value: "in_out_bounce" },
+                      { value: "in_back" },
+                      { value: "out_back" },
+                      { value: "in_out_back" },
+                      { value: "in_elastic" },
+                      { value: "out_elastic" },
+                      { value: "in_out_elastic" }
                     ]
                   }
                 ]
               },
-
-              // optional: pos <position: x y z>
               {
                 type: "literal",
                 value: "pos",
@@ -942,8 +1006,6 @@ const command_list = [
                   { type: "location", name: "position" }
                 ]
               },
-
-              // optional: rot <xRot: float> <yRot: float>
               {
                 type: "literal",
                 value: "rot",
@@ -953,8 +1015,6 @@ const command_list = [
                   { type: "float", name: "yRot" }
                 ]
               },
-
-              // optional: facing <lookAtEntity | lookAtPosition>
               {
                 type: "literal",
                 value: "facing",
@@ -964,8 +1024,6 @@ const command_list = [
                   { type: "location", name: "lookAtPosition", optional: true }
                 ]
               },
-
-              // optional: view_offset <xViewOffset: float> <yViewOffset: float>
               {
                 type: "literal",
                 value: "view_offset",
@@ -975,8 +1033,6 @@ const command_list = [
                   { type: "float", name: "yViewOffset" }
                 ]
               },
-
-              // optional: entity_offset <xEntityOffset: float> <yEntityOffset: float> <zEntityOffset: float>
               {
                 type: "literal",
                 value: "entity_offset",
@@ -986,16 +1042,14 @@ const command_list = [
                   { type: "float", name: "yEntityOffset" },
                   { type: "float", name: "zEntityOffset" }
                 ]
-              },
-
-              // optional: rot + view_offset + entity_offset combinations are allowed via the next chains above
+              }
             ]
           },
 
-          // entferne Ziel / Ziel setzen
+          // target_entity
           {
-            value: "target_entity",
-            next: [
+            name: "target_entity",
+            syntaxes: [
               { type: "entityselector", name: "entity" },
               {
                 type: "literal",
@@ -1009,103 +1063,109 @@ const command_list = [
               }
             ]
           },
-          { value: "remove_target" },
 
-          // clear camera overrides
-          { value: "clear" },
 
-          // fade variants
+
+
+
+          // Set FOV
           {
-            value: "fade",
-            next: [
-              // fade time <fadeInSeconds: float> <holdSeconds: float> <fadeOutSeconds: float> [color <r g b>]
-              {
-                type: "literal",
-                value: "time",
-                next: [
-                  { type: "float", name: "fadeInSeconds" },
-                  { type: "float", name: "holdSeconds" },
-                  { type: "float", name: "fadeOutSeconds" },
-                  {
-                    type: "literal",
-                    value: "color",
-                    optional: true,
-                    next: [
-                      { type: "int", name: "red" },
-                      { type: "int", name: "green" },
-                      { type: "int", name: "blue" }
-                    ]
-                  }
-                ]
-              },
-
-              // fade color <r g b>
-              {
-                type: "literal",
-                value: "color",
-                next: [
-                  { type: "int", name: "red" },
-                  { type: "int", name: "green" },
-                  { type: "int", name: "blue" }
-                ]
-              },
-
-              // simple 'fade' with optional parameters
-              { type: "literal", value: "", optional: true }
-            ]
-          },
-
-          // fov_set / fov_clear
-          {
-            value: "fov_set",
-            next: [
+            name: "fov_set",
+            syntaxes: [
               { type: "float", name: "fov_value" },
               { type: "float", name: "fovEaseTime", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "fovEaseType",
                 optional: true,
                 value: [
-                  { value: "linear" },{ value: "spring" },{ value: "in_quad" },{ value: "out_quad" },
-                  { value: "in_out_quad" },{ value: "in_cubic" },{ value: "out_cubic" },{ value: "in_out_cubic" },
-                  { value: "in_quart" },{ value: "out_quart" },{ value: "in_out_quart" },{ value: "in_quint" },
-                  { value: "out_quint" },{ value: "in_out_quint" },{ value: "in_sine" },{ value: "out_sine" },
-                  { value: "in_out_sine" },{ value: "in_expo" },{ value: "out_expo" },{ value: "in_out_expo" },
-                  { value: "in_circ" },{ value: "out_circ" },{ value: "in_out_circ" },{ value: "in_bounce" },
-                  { value: "out_bounce" },{ value: "in_out_bounce" },{ value: "in_back" },{ value: "out_back" },
-                  { value: "in_out_back" },{ value: "in_elastic" },{ value: "out_elastic" },{ value: "in_out_elastic" }
+                  { value: "linear" },
+                  { value: "spring" },
+                  { value: "in_quad" },
+                  { value: "out_quad" },
+                  { value: "in_out_quad" },
+                  { value: "in_cubic" },
+                  { value: "out_cubic" },
+                  { value: "in_out_cubic" },
+                  { value: "in_quart" },
+                  { value: "out_quart" },
+                  { value: "in_out_quart" },
+                  { value: "in_quint" },
+                  { value: "out_quint" },
+                  { value: "in_out_quint" },
+                  { value: "in_sine" },
+                  { value: "out_sine" },
+                  { value: "in_out_sine" },
+                  { value: "in_expo" },
+                  { value: "out_expo" },
+                  { value: "in_out_expo" },
+                  { value: "in_circ" },
+                  { value: "out_circ" },
+                  { value: "in_out_circ" },
+                  { value: "in_bounce" },
+                  { value: "out_bounce" },
+                  { value: "in_out_bounce" },
+                  { value: "in_back" },
+                  { value: "out_back" },
+                  { value: "in_out_back" },
+                  { value: "in_elastic" },
+                  { value: "out_elastic" },
+                  { value: "in_out_elastic" }
                 ]
               }
             ]
           },
+
+          //  Clear FOV
           {
-            value: "fov_clear",
-            next: [
+            name: "fov_clear",
+            syntaxes: [
               { type: "float", name: "fovEaseTime", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "fovEaseType",
                 optional: true,
                 value: [
-                  { value: "linear" },{ value: "spring" },{ value: "in_quad" },{ value: "out_quad" },
-                  { value: "in_out_quad" },{ value: "in_cubic" },{ value: "out_cubic" },{ value: "in_out_cubic" },
-                  { value: "in_quart" },{ value: "out_quart" },{ value: "in_out_quart" },{ value: "in_quint" },
-                  { value: "out_quint" },{ value: "in_out_quint" },{ value: "in_sine" },{ value: "out_sine" },
-                  { value: "in_out_sine" },{ value: "in_expo" },{ value: "out_expo" },{ value: "in_out_expo" },
-                  { value: "in_circ" },{ value: "out_circ" },{ value: "in_out_circ" },{ value: "in_bounce" },
-                  { value: "out_bounce" },{ value: "in_out_bounce" },{ value: "in_back" },{ value: "out_back" },
-                  { value: "in_out_back" },{ value: "in_elastic" },{ value: "out_elastic" },{ value: "in_out_elastic" }
+                  { value: "linear" },
+                  { value: "spring" },
+                  { value: "in_quad" },
+                  { value: "out_quad" },
+                  { value: "in_out_quad" },
+                  { value: "in_cubic" },
+                  { value: "out_cubic" },
+                  { value: "in_out_cubic" },
+                  { value: "in_quart" },
+                  { value: "out_quart" },
+                  { value: "in_out_quart" },
+                  { value: "in_quint" },
+                  { value: "out_quint" },
+                  { value: "in_out_quint" },
+                  { value: "in_sine" },
+                  { value: "out_sine" },
+                  { value: "in_out_sine" },
+                  { value: "in_expo" },
+                  { value: "out_expo" },
+                  { value: "in_out_expo" },
+                  { value: "in_circ" },
+                  { value: "out_circ" },
+                  { value: "in_out_circ" },
+                  { value: "in_bounce" },
+                  { value: "out_bounce" },
+                  { value: "in_out_bounce" },
+                  { value: "in_back" },
+                  { value: "out_back" },
+                  { value: "in_out_back" },
+                  { value: "in_elastic" },
+                  { value: "out_elastic" },
+                  { value: "in_out_elastic" }
                 ]
               }
             ]
           }
-
-        ] // end action values
-      } // end action enum
-    ] // end syntaxes
+        ]
+      }
+    ]
   },
-
-  */
 
   {
     name: "playsound",
@@ -1114,12 +1174,13 @@ const command_list = [
     description: "Play a sound",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/playsound" },
+      { type: "literal", value: "playsound" },
       { type: "string", name: "sound" },
       { type: "playerselector", name: "targets", optional: true },
       { type: "location", name: "pos", optional: true },
       { type: "float", name: "volume", optional: true },
-      { type: "float", name: "pitch", optional: true }
+      { type: "float", name: "pitch", optional: true },
+      { type: "float", name: "minVolume", optional: true }
     ]
   },
 
@@ -1129,11 +1190,12 @@ const command_list = [
     description: "Set block at coordinates",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/setblock" },
+      { type: "literal", value: "setblock" },
       { type: "location", name: "pos" },
       { type: "blocktype", name: "block" },
+      { type: "int", name: "data", optional: true },
       {
-        type: "enum",
+        type: "choice",
         name: "mode",
         optional: true,
         value: [{ value: "destroy" }, { value: "keep" }, { value: "replace" }]
@@ -1149,7 +1211,7 @@ const command_list = [
     description: "Set or query the weather",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/weather" },
+      { type: "literal", value: "weather" },
       { type: "weatherType", name: "type"},
       { type: "int", name: "duration", optional: true }
     ]
@@ -1163,7 +1225,7 @@ const command_list = [
     description: "Show help for commands or a specific command",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/help" },
+      { type: "literal", value: "help" },
       { type: "string", name: "command", optional: true }
     ]
   },
@@ -1171,11 +1233,11 @@ const command_list = [
   {
     name: "daylock",
     aliases: ["daylock", "alwaysday"],
-    txtures: "textures/ui/lock_color",
+    textures: "textures/ui/lock_color",
     description: "Lock/unlock the time of day",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/daylock" },
+      { type: "literal", value: "daylock" },
       { type: "bool", name: "enabled"}
     ]
   },
@@ -1188,7 +1250,7 @@ const command_list = [
     description: "Clear items from a player's inventory",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/clear" },
+      { type: "literal", value: "clear" },
       { type: "playerselector", name: "player", optional: true },
       { type: "itemtype", name: "item", optional: true },
       { type: "int", name: "count", optional: true }
@@ -1202,7 +1264,7 @@ const command_list = [
     description: "Clear world spawnpoint or player's spawn",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/clearspawnpoint" },
+      { type: "literal", value: "clearspawnpoint" },
       { type: "playerselector", name: "player", optional: true }
     ]
   },
@@ -1214,12 +1276,12 @@ const command_list = [
     description: "Clone blocks from one region to another",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/clone" },
+      { type: "literal", value: "clone" },
       { type: "location", name: "begin" },
       { type: "location", name: "end" },
       { type: "location", name: "destination" },
       {
-        type: "enum",
+        type: "choice",
         name: "mode",
         optional: true,
         value: [
@@ -1239,7 +1301,7 @@ const command_list = [
     description: "Damage an entity",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/damage" },
+      { type: "literal", value: "damage" },
       { type: "entityselector", name: "target" },
       { type: "int", name: "amount" },
       { type: "string", name: "damagetype", optional: true },
@@ -1254,7 +1316,7 @@ const command_list = [
     description: "Show an NPC dialogue to player",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/dialogue" },
+      { type: "literal", value: "dialogue" },
       { type: "playerselector", name: "player" },
       { type: "string", name: "dialogueId" }
     ]
@@ -1267,9 +1329,9 @@ const command_list = [
     description: "Set or query difficulty",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/difficulty" },
+      { type: "literal", value: "difficulty" },
       {
-        type: "enum",
+        type: "choice",
         name: "level",
         value: [{ value: "peaceful" }, { value: "easy" }, { value: "normal" }, { value: "hard" }]
       }
@@ -1296,7 +1358,7 @@ const command_list = [
     description: "Apply an enchantment to an item",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/enchant" },
+      { type: "literal", value: "enchant" },
       { type: "playerselector", name: "player" },
       { type: "enchanttype", name: "enchantment" },
       { type: "int", name: "level", optional: true }
@@ -1310,20 +1372,130 @@ const command_list = [
     description: "Trigger a game event",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/event" },
+      { type: "literal", value: "event" },
+      { type: "entityselector", name: "targetEntity" },
+      { type: "string", name: "eventName" },
+    ]
+  },
+
+  {
+    name: "execute",
+    aliases: ["execute"],
+    textures: "textures/ui/compass_item",
+    description: "Execute a command with modified execution context",
+    category: 4,
+    syntaxes: [
+      { type: "literal", value: "execute" },
       {
-        type: "enum",
-        name: "entity",
-        value: [
+        type: "repeat",
+        min: 0,
+        syntaxes: [
           {
-            value: "entity",
-            next: [
-              { type: "entityselector", name: "targetEntity" },
-              { type: "string", name: "eventName" },
+            type: "choice",
+            name: "execute_clause",
+            options: [
+              { name: "as", syntaxes: [{ type: "entityselector", name: "targets" }] },
+              { name: "at", syntaxes: [{ type: "entityselector", name: "targets" }] },
+              { name: "in", syntaxes: [{ type: "string", name: "dimension" }] },
+              {
+                name: "positioned",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "positioned_mode",
+                    options: [
+                      { name: "as", syntaxes: [{ type: "entityselector", name: "targets" }] },
+                      { name: "over", syntaxes: [{ type: "string", name: "heightMap" }] },
+                      { name: "position", syntaxes: [{ type: "location", name: "position" }] }
+                    ]
+                  }
+                ]
+              },
+              {
+                name: "rotated",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "rotated_mode",
+                    options: [
+                      { name: "as", syntaxes: [{ type: "entityselector", name: "targets" }] },
+                      { name: "angles", syntaxes: [{ type: "float", name: "yaw" }, { type: "float", name: "pitch" }] }
+                    ]
+                  }
+                ]
+              },
+              {
+                name: "facing",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "facing_mode",
+                    options: [
+                      { name: "entity", syntaxes: [{ type: "entityselector", name: "targets" }, { type: "choice", name: "anchor", options: [{ name: "eyes", syntaxes: [] }, { name: "feet", syntaxes: [] }] }] },
+                      { name: "position", syntaxes: [{ type: "location", name: "position" }] }
+                    ]
+                  }
+                ]
+              },
+              { name: "align", syntaxes: [{ type: "string", name: "axes" }] },
+              { name: "anchored", syntaxes: [{ type: "choice", name: "anchor", options: [{ name: "eyes", syntaxes: [] }, { name: "feet", syntaxes: [] }] }] },
+              {
+                name: "if",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "if_mode",
+                    options: [
+                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }] },
+                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }] },
+                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }] },
+                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }] }
+                    ]
+                  }
+                ]
+              },
+              {
+                name: "unless",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "unless_mode",
+                    options: [
+                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }] },
+                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }] },
+                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }] },
+                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }] }
+                    ]
+                  }
+                ]
+              },
+              {
+                name: "store",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "store_mode",
+                    options: [
+                      { name: "result", syntaxes: [] },
+                      { name: "success", syntaxes: [] }
+                    ]
+                  },
+                  {
+                    type: "choice",
+                    name: "store_target",
+                    options: [
+                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "objective" }] },
+                      { name: "bossbar", syntaxes: [{ type: "string", name: "id" }, { type: "choice", name: "bossbar_field", options: [{ name: "value", syntaxes: [] }, { name: "max", syntaxes: [] }] }] }
+                    ]
+                  }
+                ]
+              }
             ]
           }
         ]
-      }
+      },
+      { type: "choice", name: "run_keyword", options: [{ name: "run", syntaxes: [] }] },
+      { type: "command_tail", name: "command" }
     ]
   },
 
@@ -1334,7 +1506,7 @@ const command_list = [
     description: "Grant experience points",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/xp" },
+      { type: "literal", value: "xp" },
       { type: "int", name: "amount" },
       { type: "playerselector", name: "player", optional: true }
     ]
@@ -1347,20 +1519,19 @@ const command_list = [
     description: "Control fog",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/fog" },
+      { type: "literal", value: "fog" },
 
       // optional: Ziel-Spieler/Targets
       { type: "playerselector", name: "targets", optional: true },
 
       // Hauptaktionen als enum; jede Aktion kann eigene Next-Parameter haben
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           // Setze Fog-Parameter direkt
           {
-            value: "set",
-            next: [
+            name: "set",
+            syntaxes: [
               // Dichte (0.0 - 1.0 typisch)
               { type: "float", name: "density", optional: true },
 
@@ -1395,7 +1566,7 @@ const command_list = [
                 next: [
                   { type: "float", name: "timeSeconds" },
                   {
-                    type: "enum",
+                    type: "choice",
                     name: "easing",
                     optional: true,
                     value: [
@@ -1416,10 +1587,10 @@ const command_list = [
 
           // Setze eine vordefinierte Preset-Konfiguration
           {
-            value: "preset",
-            next: [
+            name: "preset",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "presetName",
                 value: [
                   { value: "default" },
@@ -1437,8 +1608,8 @@ const command_list = [
 
           // Einfache Farbänderung
           {
-            value: "color",
-            next: [
+            name: "color",
+            syntaxes: [
               { type: "int", name: "red" },
               { type: "int", name: "green" },
               { type: "int", name: "blue" }
@@ -1447,8 +1618,8 @@ const command_list = [
 
           // Blend-Funktion: mischt von einer Farbe/Dichte zur anderen
           {
-            value: "blend",
-            next: [
+            name: "blend",
+            syntaxes: [
               { type: "float", name: "durationSeconds" },
               { type: "float", name: "fromDensity" },
               { type: "int", name: "fromRed" },
@@ -1462,15 +1633,23 @@ const command_list = [
           },
 
           // Entferne/kläre alle Fog-Overrides
-          { value: "clear" },
+          {
+            name: "clear",
+            syntaxes: []
+          },
 
           // Setze Fog so, dass es dem aktuellen Wetter folgt (wenn relevant)
-          { value: "follow_weather" },
+          {
+            name: "follow_weather",
+            syntaxes: []
+          },
 
           // Schalte Fog ein/aus (Kurzform)
           {
-            value: "toggle",
-            next: [{ type: "bool", name: "enabled", optional: true }]
+            name: "toggle",
+            syntaxes: [
+              { type: "bool", name: "enabled", optional: true }
+            ]
           }
         ]
       }
@@ -1484,7 +1663,7 @@ const command_list = [
     textures: "textures/ui/copy",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/function" },
+      { type: "literal", value: "function" },
       { type: "string", name: "name" }
     ]
   },
@@ -1503,37 +1682,16 @@ const command_list = [
     },
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/gamemode" },
+      { type: "literal", value: "gamemode" },
       {
-        type: "enum",
+        type: "choice",
         name: "mode",
         value: [{ value: "survival" }, { value: "creative" }, { value: "adventure" }, { value: "default" }, { value: "spectator" }, { value: "s" }, { value: "a" }, { value: "d" }, { value: "c" }]
       },
       { type: "playerselector", name: "target", optional: true }
     ]
   },
-
-  /* // Legacy gamerule command disabled
   {
-    name: "gamerule",
-    aliases: ["gamerule"],
-    cc_hidden: true,
-    textures: "textures/ui/settings_pause_menu_icon",
-    vc_hiperlink: (player) =>
-      load_save_data().find(entry => entry.id === player.id)?.quick_run ?
-       visual_command_gamerule(player) : visual_command_gamerule_quick_run(player),
-    vc_available: (player) => version_info.release_type < 2,
-    description: "Set or query a gamerule",
-    category: 4,
-    syntaxes: [
-      { type: "literal", value: "/gamerule" },
-      { type: "string", name: "rule" },
-      { type: "string", name: "value" }
-    ]
-  },
-  */
-
-  { // New gamerule command
     name: "gamerule",
     aliases: ["gamerule"],
     cc_hidden: true,
@@ -1544,7 +1702,7 @@ const command_list = [
     description: "Set a gamerule",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/gamerule" },
+      { type: "literal", value: "gamerule" },
       { type: "gameruletype", name: "rule" },
       { type: "string", name: "value" }
     ]
@@ -1558,10 +1716,10 @@ const command_list = [
     description: "Control HUD elements",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/hud" },
+      { type: "literal", value: "hud" },
       { type: "playerselector", name: "target" },
       {
-        type: "enum",
+        type: "choice",
         name: "visible",
         value: [
           { value: "hide" },
@@ -1569,7 +1727,7 @@ const command_list = [
         ]
       },
       {
-        type: "enum",
+        type: "choice",
         name: "hud_element",
         optional: true,
         value: [
@@ -1600,9 +1758,9 @@ const command_list = [
     recommended: (player) => [...Array(13).keys()].some(x => !player.inputPermissions.isPermissionCategoryEnabled(x)),
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/inputpermission" },
+      { type: "literal", value: "inputpermission" },
       {
-        type: "enum",
+        type: "choice",
         name: "subcommand",
         value: [
           { value: "set" },
@@ -1612,7 +1770,7 @@ const command_list = [
       },
       { type: "playerselector", name: "player" },
       {
-        type: "enum",
+        type: "choice",
         name: "permission",
         optional: true,
         value: [
@@ -1636,16 +1794,13 @@ const command_list = [
   },
 
   {
-    name: "kick",
-    aliases: ["kick"],
-    textures: "textures/ui/profile_glyph_color",
-    cc_hidden: true,
-    description: "Kick a player from the server",
-    category: 3,
+    name: "seed",
+    category: 1,
+    aliases: ["seed"],
+    textures: "textures/ui/worldsIcon",
+    description: "Gives the world seed",
     syntaxes: [
-      { type: "literal", value: "/kick" },
-      { type: "playerselector", name: "player" },
-      { type: "string", name: "reason", optional: true }
+      { type: "literal", value: "seed" }
     ]
   },
 
@@ -1656,7 +1811,7 @@ const command_list = [
     description: "Kill entities",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/kill" },
+      { type: "literal", value: "kill" },
       { type: "entityselector", name: "target", optional: true }
     ]
   },
@@ -1668,20 +1823,19 @@ const command_list = [
     description: "Play / queue / stop music tracks",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/music" },
+      { type: "literal", value: "music" },
 
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "play",
-            next: [
+            name: "play",
+            syntaxes: [
               { type: "string", name: "trackName" },
               { type: "float", name: "volume", optional: true },
               { type: "float", name: "fadeSeconds", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "repeatMode",
                 optional: true,
                 value: [
@@ -1693,13 +1847,13 @@ const command_list = [
           },
 
           {
-            value: "queue",
-            next: [
+            name: "queue",
+            syntaxes: [
               { type: "string", name: "trackName" },
               { type: "float", name: "volume", optional: true },
               { type: "float", name: "fadeSeconds", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "repeatMode",
                 optional: true,
                 value: [
@@ -1711,15 +1865,15 @@ const command_list = [
           },
 
           {
-            value: "stop",
-            next: [
+            name: "stop",
+            syntaxes: [
               { type: "float", name: "fadeSeconds", optional: true }
             ]
           },
 
           {
-            value: "volume",
-            next: [
+            name: "volume",
+            syntaxes: [
               { type: "float", name: "volume" }
             ]
           }
@@ -1735,7 +1889,7 @@ const command_list = [
     description: "Spawn particles",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/particle" },
+      { type: "literal", value: "particle" },
       { type: "string", name: "particleName" },
       { type: "location", name: "pos", optional: true },
       { type: "int", name: "count", optional: true }
@@ -1749,7 +1903,7 @@ const command_list = [
     description: "Play an animation on an entity",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/playanimation" },
+      { type: "literal", value: "playanimation" },
       { type: "entityselector", name: "target" },
       { type: "string", name: "animation" }
     ]
@@ -1762,45 +1916,46 @@ const command_list = [
     description: "Grant or revoke recipes",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/recipe" },
+      { type: "literal", value: "recipe" },
       { type: "playerselector", name: "player" },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "give",
-            next: [
+            name: "give",
+            syntaxes: [
               { type: "string", name: "recipeName", optional: true },
               { type: "string", name: "recipeNamespace", optional: true }
             ]
           },
           {
-            value: "take",
-            next: [
+            name: "take",
+            syntaxes: [
               { type: "string", name: "recipeName", optional: true },
               { type: "string", name: "recipeNamespace", optional: true }
             ]
           },
           {
-            value: "grant",
-            next: [
+            name: "grant",
+            syntaxes: [
               { type: "string", name: "recipeName", optional: true },
               { type: "string", name: "recipeNamespace", optional: true }
             ]
           },
           {
-            value: "revoke",
-            next: [
+            name: "revoke",
+            syntaxes: [
               { type: "string", name: "recipeName", optional: true },
               { type: "string", name: "recipeNamespace", optional: true }
             ]
           },
           {
-            value: "all" // no next parameters needed
+            name: "all",
+            syntaxes: []
           },
           {
-            value: "none" // no next parameters needed
+            name: "none",
+            syntaxes: []
           }
         ]
       }
@@ -1815,14 +1970,13 @@ const command_list = [
     description: "Replaces items in inventories or block containers",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/replaceitem" },
+      { type: "literal", value: "replaceitem" },
       {
-        type: "enum",
-        name: "targetType",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "entity",
-            next: [
+            name: "entity",
+            syntaxes: [
               { type: "entityselector", name: "target" },
               { type: "string", name: "slot" },
               { type: "itemtype", name: "item" },
@@ -1832,8 +1986,8 @@ const command_list = [
             ]
           },
           {
-            value: "block",
-            next: [
+            name: "block",
+            syntaxes: [
               { type: "location", name: "pos" },
               { type: "string", name: "slot" },
               { type: "itemtype", name: "item" },
@@ -1856,19 +2010,18 @@ const command_list = [
     description: "Manage entity riding",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/ride" },
+      { type: "literal", value: "ride" },
       { type: "entityselector", name: "rider" },
 
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "start_riding",
-            next: [
+            name: "start_riding",
+            syntaxes: [
               { type: "entityselector", name: "ridee" },
               {
-                type: "enum",
+                type: "choice",
                 name: "teleportRules",
                 optional: true,
                 value: [
@@ -1878,7 +2031,7 @@ const command_list = [
                 ]
               },
               {
-                type: "enum",
+                type: "choice",
                 name: "rideRules",
                 optional: true,
                 value: [
@@ -1890,18 +2043,21 @@ const command_list = [
             ]
           },
 
-          { value: "stop_riding" },
+          {
+            name: "stop_riding",
+            syntaxes: []
+          },
 
           {
-            value: "evict_riders",
-            next: [
+            name: "evict_riders",
+            syntaxes: [
               { type: "entityselector", name: "ridee" }
             ]
           },
 
           {
-            value: "summon_rider",
-            next: [
+            name: "summon_rider",
+            syntaxes: [
               { type: "entityType", name: "entity" },
               { type: "location", name: "spawnPos", optional: true },
               { type: "string", name: "spawnEvent", optional: true }
@@ -1920,38 +2076,37 @@ const command_list = [
     description: "Schedule a function or command",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/schedule" },
+      { type: "literal", value: "schedule" },
 
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "function",
-            next: [
+            name: "function",
+            syntaxes: [
               { type: "string", name: "functionName" },
               { type: "int", name: "ticks" },
               { type: "string", name: "target", optional: true }
             ]
           },
           {
-            value: "add",
-            next: [
+            name: "add",
+            syntaxes: [
               { type: "string", name: "functionName" },
               { type: "int", name: "ticks" },
               { type: "string", name: "target", optional: true }
             ]
           },
           {
-            value: "run",
-            next: [
+            name: "run",
+            syntaxes: [
               { type: "string", name: "functionName" },
               { type: "string", name: "target", optional: true }
             ]
           },
           {
-            value: "clear",
-            next: [
+            name: "clear",
+            syntaxes: [
               { type: "string", name: "functionName", optional: true },
               { type: "string", name: "target", optional: true }
             ]
@@ -1969,36 +2124,35 @@ const command_list = [
     description: "Manage objectives and players",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/scoreboard" },
-
+      { type: "literal", value: "scoreboard" },
       {
-        type: "enum",
-        name: "subcommand",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "objectives",
-            next: [
+            name: "objectives",
+            syntaxes: [
               {
-                type: "enum",
-                name: "action",
-                value: [
+                type: "choice",
+                options: [
                   {
-                    value: "add",
-                    next: [
+                    name: "add",
+                    syntaxes: [
                       { type: "string", name: "objective" },
                       { type: "string", name: "criteria", optional: true },
                       { type: "string", name: "displayName", optional: true }
                     ]
                   },
                   {
-                    value: "remove",
-                    next: [{ type: "string", name: "objective" }]
+                    name: "remove",
+                    syntaxes: [
+                      { type: "string", name: "objective" }
+                    ]
                   },
                   {
-                    value: "setdisplay",
-                    next: [
+                    name: "setdisplay",
+                    syntaxes: [
                       {
-                        type: "enum",
+                        type: "choice",
                         name: "slot",
                         value: [
                           { value: "list" },
@@ -2009,50 +2163,53 @@ const command_list = [
                       { type: "string", name: "objective", optional: true }
                     ]
                   },
-                  { value: "list" }
+                  { name: "list", syntaxes: [] }
                 ]
               }
             ]
           },
-
           {
-            value: "players",
-            next: [
+            name: "players",
+            syntaxes: [
               {
-                type: "enum",
-                name: "action",
-                value: [
+                type: "choice",
+                options: [
                   {
-                    value: "add",
-                    next: [
+                    name: "add",
+                    syntaxes: [
                       { type: "playerselector", name: "player" },
                       { type: "string", name: "objective" },
                       { type: "int", name: "score", optional: true }
                     ]
                   },
                   {
-                    value: "remove",
-                    next: [
+                    name: "remove",
+                    syntaxes: [
                       { type: "playerselector", name: "player" },
                       { type: "string", name: "objective", optional: true }
                     ]
                   },
                   {
-                    value: "set",
-                    next: [
+                    name: "set",
+                    syntaxes: [
                       { type: "playerselector", name: "player" },
                       { type: "string", name: "objective" },
                       { type: "int", name: "score" }
                     ]
                   },
                   {
-                    value: "reset",
-                    next: [
+                    name: "reset",
+                    syntaxes: [
                       { type: "playerselector", name: "player", optional: true },
                       { type: "string", name: "objective", optional: true }
                     ]
                   },
-                  { value: "list", next: [{ type: "playerselector", name: "player", optional: true }] }
+                  {
+                    name: "list",
+                    syntaxes: [
+                      { type: "playerselector", name: "player", optional: true }
+                    ]
+                  }
                 ]
               }
             ]
@@ -2070,7 +2227,7 @@ const command_list = [
     description: "Set the world spawn position",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/setworldspawn" },
+      { type: "literal", value: "setworldspawn" },
       { type: "location", name: "pos", optional: true }
     ]
   },
@@ -2082,7 +2239,7 @@ const command_list = [
     description: "Set a player's spawnpoint",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/spawnpoint" },
+      { type: "literal", value: "spawnpoint" },
       { type: "playerselector", name: "player", optional: true },
       { type: "location", name: "pos", optional: true }
     ]
@@ -2095,7 +2252,7 @@ const command_list = [
     textures: "textures/items/ender_pearl",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/spreadplayers" },
+      { type: "literal", value: "spreadplayers" },
       { type: "location", name: "center" },
       { type: "float", name: "spreadDistance" },
       { type: "float", name: "maxRange" },
@@ -2109,7 +2266,7 @@ const command_list = [
     description: "Stop sounds for players",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/stopsound" },
+      { type: "literal", value: "stopsound" },
       { type: "playerselector", name: "targets" },
       { type: "string", name: "sound", optional: true }
     ]
@@ -2122,15 +2279,14 @@ const command_list = [
     textures: "textures/ui/structure_block",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/structure" },
+      { type: "literal", value: "structure" },
 
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "save",
-            next: [
+            name: "save",
+            syntaxes: [
               { type: "string", name: "structureName" },
               { type: "location", name: "pos1" },
               { type: "location", name: "pos2" },
@@ -2140,7 +2296,7 @@ const command_list = [
                 optional: true
               },
               {
-                type: "enum",
+                type: "choice",
                 name: "saveMode",
                 optional: true,
                 value: [
@@ -2157,12 +2313,12 @@ const command_list = [
           },
 
           {
-            value: "load",
-            next: [
+            name: "load",
+            syntaxes: [
               { type: "string", name: "structureName" },
               { type: "location", name: "destination" },
               {
-                type: "enum",
+                type: "choice",
                 name: "rotation",
                 optional: true,
                 value: [
@@ -2173,7 +2329,7 @@ const command_list = [
                 ]
               },
               {
-                type: "enum",
+                type: "choice",
                 name: "mirror",
                 optional: true,
                 value: [
@@ -2200,11 +2356,6 @@ const command_list = [
                 optional: true
               },
               {
-                type: "bool",
-                name: "waterlogged",
-                optional: true
-              },
-              {
                 type: "float",
                 name: "integrity",
                 optional: true
@@ -2218,8 +2369,8 @@ const command_list = [
           },
 
           {
-            value: "delete",
-            next: [
+            name: "delete",
+            syntaxes: [
               { type: "string", name: "structureName" }
             ]
           }
@@ -2236,29 +2387,29 @@ const command_list = [
     textures: "textures/items/name_tag",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/tag" },
+      { type: "literal", value: "tag" },
       {
         type: "entityselector",
         name: "target"
       },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "add",
-            next: [
+            name: "add",
+            syntaxes: [
               { type: "string", name: "tag" }
             ]
           },
           {
-            value: "remove",
-            next: [
+            name: "remove",
+            syntaxes: [
               { type: "string", name: "tag" }
             ]
           },
           {
-            value: "list"
+            name: "list",
+            syntaxes: []
           }
         ]
       }
@@ -2274,7 +2425,7 @@ const command_list = [
     description: "Send JSON-formatted chat messages",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/tellraw" },
+      { type: "literal", value: "tellraw" },
       { type: "playerselector", name: "target" },
       { type: "json", name: "message" }
     ]
@@ -2287,7 +2438,7 @@ const command_list = [
     description: "Test for entities matching criteria",
     category: 2,
     syntaxes: [
-      { type: "literal", value: "/testfor" },
+      { type: "literal", value: "testfor" },
       { type: "entityselector", name: "target" }
     ]
   },
@@ -2299,7 +2450,7 @@ const command_list = [
     description: "Test a single block for a type/state",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/testforblock" },
+      { type: "literal", value: "testforblock" },
       { type: "location", name: "pos" },
       { type: "blocktype", name: "block" }
     ]
@@ -2312,12 +2463,12 @@ const command_list = [
     description: "Test that two regions contain identical blocks",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/testforblocks" },
+      { type: "literal", value: "testforblocks" },
       { type: "location", name: "begin" },
       { type: "location", name: "end" },
       { type: "location", name: "destination" },
       {
-        type: "enum",
+        type: "choice",
         name: "mode",
         optional: true,
         value: [
@@ -2342,15 +2493,14 @@ const command_list = [
     description: "Manage ticking areas",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/tickingarea" },
+      { type: "literal", value: "tickingarea" },
 
       {
-        type: "enum",
-        name: "subcommand",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "add",
-            next: [
+            name: "add",
+            syntaxes: [
               {
                 type: "location",
                 name: "pos1"
@@ -2368,8 +2518,8 @@ const command_list = [
             ]
           },
           {
-            value: "remove",
-            next: [
+            name: "remove",
+            syntaxes: [
               {
                 type: "string",
                 name: "name"
@@ -2377,10 +2527,12 @@ const command_list = [
             ]
           },
           {
-            value: "list"
+            name: "list",
+            syntaxes: []
           },
           {
-            value: "remove_all"
+            name: "remove_all",
+            syntaxes: []
           }
         ]
       }
@@ -2398,16 +2550,15 @@ const command_list = [
     recommended: (player) => !(world.getTimeOfDay() < 12000),
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/time" },
+      { type: "literal", value: "time" },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "set",
-            next: [
+            name: "set",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "timeType",
                 value: [
                   { value: "day" },
@@ -2421,16 +2572,16 @@ const command_list = [
             ]
           },
           {
-            value: "add",
-            next: [
+            name: "add",
+            syntaxes: [
               { type: "int", name: "ticks" }
             ]
           },
           {
-            value: "query",
-            next: [
+            name: "query",
+            syntaxes: [
               {
-                type: "enum",
+                type: "choice",
                 name: "queryType",
                 value: [
                   { value: "daytime" },
@@ -2453,40 +2604,45 @@ const command_list = [
     description: "Display titles to players",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/title" },
+      { type: "literal", value: "title" },
       { type: "playerselector", name: "player" },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "title",
-            next: [
+            name: "title",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           },
           {
-            value: "subtitle",
-            next: [
+            name: "subtitle",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           },
           {
-            value: "actionbar",
-            next: [
+            name: "actionbar",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           },
           {
-            value: "times",
-            next: [
+            name: "times",
+            syntaxes: [
               { type: "int", name: "fadeIn" },
               { type: "int", name: "stay" },
               { type: "int", name: "fadeOut" }
             ]
           },
-          { value: "clear" },
-          { value: "reset" }
+          {
+            name: "clear",
+            syntaxes: []
+          },
+          {
+            name: "reset",
+            syntaxes: []
+          }
         ]
       }
     ]
@@ -2499,27 +2655,26 @@ const command_list = [
     description: "Display raw JSON titles",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/titleraw" },
+      { type: "literal", value: "titleraw" },
       { type: "playerselector", name: "player" },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "title",
-            next: [
+            name: "title",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           },
           {
-            value: "subtitle",
-            next: [
+            name: "subtitle",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           },
           {
-            value: "actionbar",
-            next: [
+            name: "actionbar",
+            syntaxes: [
               { type: "string", name: "text" }
             ]
           }
@@ -2535,7 +2690,7 @@ const command_list = [
     aliases: ["toggledownfall"],
     description: "Toggle rain/snow",
     category: 1,
-    syntaxes: [{ type: "literal", value: "/toggledownfall" }]
+    syntaxes: [{ type: "literal", value: "toggledownfall" }]
   },
 
   {
@@ -2545,9 +2700,9 @@ const command_list = [
     description: "Shake the camera for one or more players",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/camerashake" },
+      { type: "literal", value: "camerashake" },
       {
-        type: "enum",
+        type: "choice",
         name: "action",
         value: [
           {
@@ -2578,7 +2733,36 @@ const command_list = [
     description: "List players on the server or query server info",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/list" }
+      { type: "literal", value: "list" }
+    ]
+  },
+
+  {
+    name: "locate",
+    aliases: ["locate"],
+    textures: "textures/ui/map_icon",
+    description: "Locate the nearest biome or structure",
+    category: 1,
+    syntaxes: [
+      { type: "literal", value: "locate" },
+      {
+        type: "choice",
+        options: [
+          {
+            name: "biome",
+            syntaxes: [
+              { type: "string", name: "biomeName" }
+            ]
+          },
+          {
+            name: "structure",
+            syntaxes: [
+              { type: "string", name: "structureName" },
+              { type: "literal", value: "newChunksOnly", optional: true }
+            ]
+          }
+        ]
+      }
     ]
   },
 
@@ -2589,30 +2773,29 @@ const command_list = [
     description: "Give or spawn loot from a loot table",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/loot" },
+      { type: "literal", value: "loot" },
       {
-        type: "enum",
-        name: "action",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "give",
-            next: [
+            name: "give",
+            syntaxes: [
               { type: "string", name: "lootTable" },
               { type: "playerselector", name: "target", optional: true },
               { type: "int", name: "count", optional: true }
             ]
           },
           {
-            value: "spawn",
-            next: [
+            name: "spawn",
+            syntaxes: [
               { type: "string", name: "lootTable" },
               { type: "location", name: "pos", optional: true },
               { type: "int", name: "count", optional: true }
             ]
           },
           {
-            value: "insert",
-            next: [
+            name: "insert",
+            syntaxes: [
               { type: "string", name: "lootTable" },
               { type: "location", name: "containerPos" }
             ]
@@ -2629,18 +2812,17 @@ const command_list = [
     description: "Place an item or block at a position",
     category: 1,
     syntaxes: [
-      { type: "literal", value: "/place" },
+      { type: "literal", value: "place" },
       {
-        type: "enum",
-        name: "what",
-        value: [
+        type: "choice",
+        options: [
           {
-            value: "block",
-            next: [
+            name: "block",
+            syntaxes: [
               { type: "blocktype", name: "block" },
               { type: "location", name: "pos", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "mode",
                 optional: true,
                 value: [
@@ -2652,19 +2834,19 @@ const command_list = [
             ]
           },
           {
-            value: "item",
-            next: [
+            name: "item",
+            syntaxes: [
               { type: "itemtype", name: "item" },
               { type: "location", name: "pos", optional: true }
             ]
           },
           {
-            value: "structure",
-            next: [
+            name: "structure",
+            syntaxes: [
               { type: "string", name: "structureName" },
               { type: "location", name: "destination", optional: true },
               {
-                type: "enum",
+                type: "choice",
                 name: "rotation",
                 optional: true,
                 value: [ { value: "0" }, { value: "90" }, { value: "180" }, { value: "270" } ]
@@ -2684,7 +2866,7 @@ const command_list = [
     description: "Broadcast a chat message to all players",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/say" },
+      { type: "literal", value: "say" },
       { type: "string", name: "message" }
     ]
   },
@@ -2696,17 +2878,17 @@ const command_list = [
     description: "Debugging, profiling and diagnostics controls for the scripting system",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/script" },
+      { type: "literal", value: "script" },
 
       {
-        type: "enum",
+        type: "choice",
         name: "category",
         value: [
           {
             value: "debugger",
             next: [
               {
-                type: "enum",
+                type: "choice",
                 name: "debuggerAction",
                 value: [
                   { value: "listen", next: [{ type: "int", name: "port" }] },
@@ -2721,7 +2903,7 @@ const command_list = [
             value: "profiler",
             next: [
               {
-                type: "enum",
+                type: "choice",
                 name: "profilerAction",
                 value: [
                   { value: "start" },
@@ -2735,7 +2917,7 @@ const command_list = [
             value: "diagnostics",
             next: [
               {
-                type: "enum",
+                type: "choice",
                 name: "diagnosticsAction",
                 value: [
                   { value: "startcapture" },
@@ -2755,7 +2937,7 @@ const command_list = [
     description: "Trigger a script event",
     category: 4,
     syntaxes: [
-      { type: "literal", value: "/scriptevent" },
+      { type: "literal", value: "scriptevent" },
       { type: "string", name: "eventName" },
       { type: "entityselector", name: "target", optional: true },
       { type: "json", name: "eventData", optional: true }
@@ -2770,7 +2952,7 @@ const command_list = [
     description: "Send a private message to another player (whisper)",
     category: 3,
     syntaxes: [
-      { type: "literal", value: "/tell" },
+      { type: "literal", value: "tell" },
       { type: "playerselector", name: "target" },
       { type: "string", name: "message" }
     ]
@@ -3021,7 +3203,7 @@ function registerAllCommands(init) {
     cheatsRequired: false,
     handler: p => {
       const e = load_save_data().find(d => d.id === p.id);
-      if (p.commandPermissionLevel < 2 && !e?.allowed_commands.length) return {
+      if (p.commandPermissionLevel == 0 && !e?.allowed_commands.length) return {
           status: CustomCommandStatus.Failure,
           message: "There are no commands available to run"
       };
@@ -3523,7 +3705,7 @@ function create_player_save_data(playerId, playerName) {
 
       const dynamic_default_structure = default_player_save_data_structure(player_data.op);
       merge_defaults(player_data, dynamic_default_structure);
-      normalizeUnixKeys(target);
+      normalizeUnixKeys(player_data);
 
       if (changes_made) {
           print(`Missing save_data attributes for player ${playerName} (${playerId}) found and added.`);
@@ -3536,7 +3718,7 @@ function create_player_save_data(playerId, playerName) {
     // Player is online
 
     world.getAllPlayers().forEach(player => {
-      if (player.commandPermissionLevel >= 2 && player.id !== playerId) {
+      if (player.commandPermissionLevel >= 1 && player.id !== playerId) {
         player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
         player.playSound("random.pop")
       }
@@ -3639,7 +3821,7 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
   await system.waitTicks(40); // Wait for the player to be fully joined
 
   // Beta Feedback Request
-  if (version_info.release_type !== 2 && player.commandPermissionLevel >= 2) {
+  if (version_info.release_type !== 2 && player.commandPermissionLevel >= 1) {
     player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
   }
 
@@ -4022,7 +4204,7 @@ function isCommandAvailable(player, cmd) {
   );
 
   // Permission-Level 2 = immer erlaubt (Admin)
-  if (player.commandPermissionLevel >= 2) return true;
+  if (player.commandPermissionLevel >= 1) return true;
 
   if (cmdIndex === -1) return false;
 
@@ -4186,7 +4368,7 @@ function generate_history_entries(player) {
 
 function canPlayerUseMenu(player, player_sd_index) {
   const save_data = load_save_data();
-  if (player.commandPermissionLevel >= 2 && (player_sd_index == save_data.findIndex(e => e.id === player.id))) return true; // Admins immer Zugriff
+  if (player.commandPermissionLevel >= 1 && (player_sd_index == save_data.findIndex(e => e.id === player.id))) return true; // Admins immer Zugriff
 
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
 
@@ -4196,7 +4378,7 @@ function canPlayerUseMenu(player, player_sd_index) {
 function canPlayerUseChains(player, player_sd_index) {
   const save_data = load_save_data();
   player_sd_index = player_sd_index !== undefined ? player_sd_index : save_data.findIndex(e => e.id === player.id);
-  if (player.commandPermissionLevel >= 2) return true; // Admins immer Zugriff
+  if (player.commandPermissionLevel >= 1) return true; // Admins immer Zugriff
   return save_data[player_sd_index].allow_chains;
 }
 
@@ -4719,6 +4901,11 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
       continue;
     }
 
+    if (syn.type === "choice" || syn.type === "repeat" || syn.type === "command_tail") {
+      system.run(() => print(`Syntax-Element 'choice' in command '${cmd.name}' wird nicht in CustomCommandParamType abgebildet.`));
+      continue;
+    }
+
     // Special: dynamische enums - nur hinzufügen, wenn enumsDynamic die registrierte Enum-ID liefert.
     if (syn.type === "effecttype" || syn.type === "enchanttype" || syn.type === "weathertype") {
       const enumKey = enumsDynamic && enumsDynamic[syn.type];
@@ -4733,11 +4920,11 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
     }
 
     // inline enums
-    if (syn.type === "enum" && syn.value) {
-      const enumId = registerInlineEnum(init, cmd.name, syn.name || "enum", syn.value);
+    if (syn.type === "choice" && (syn.options || syn.value)) {
+      const values = (syn.options || syn.value).map(v => v?.name ?? v?.value ?? v).filter(Boolean);
+      const enumId = registerInlineEnum(init, cmd.name, syn.name || "choice", values);
       if (!enumId) {
-        // enum wurde herausgefiltert -> Parameter ignorieren
-        system.run(() => print(`Inline-enum für ${cmd.name}.${syn.name} wurde herausgefiltert -> kein Parameter.`));
+        system.run(() => print(`Inline-choice f?r ${cmd.name}.${syn.name} wurde herausgefiltert -> kein Parameter.`));
         continue;
       }
       const param = { type: CustomCommandParamType.Enum, name: enumId, optional: !!syn.optional };
@@ -4826,20 +5013,27 @@ function isLikelySyntaxMatch(input, typeDef, syntax) {
 
   switch (typeName) {
     case "literal": {
-      const expected = syntax?.value || syntax?.values || syntax?.expected || [];
-      if (!Array.isArray(expected) || expected.length === 0) return false;
-      const values = expected.map(v => String(v?.value ?? v));
-      if (values.some(v => v.toLowerCase() === value.toLowerCase())) return true;
-      const closest = findClosest(value, values, "literal");
-      return levenshtein(value.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(value.length * 0.4));
-    }
-    case "enum": {
-      const values = (syntax?.value || []).map(v => String(v?.value ?? v));
-      if (values.some(v => v.toLowerCase() === value.toLowerCase())) return true;
+      const rawExpected = syntax?.value || syntax?.values || syntax?.expected || [];
+      const values = (Array.isArray(rawExpected) ? rawExpected : [rawExpected]).map(v => String(v?.value ?? v).replace(/^\//, "")).filter(Boolean);
+      const normalized = value.replace(/^\//, "");
       if (values.length === 0) return false;
-      const closest = findClosest(value, values, "enum");
-      return levenshtein(value.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(value.length * 0.4));
+      if (values.some(v => v.toLowerCase() === normalized.toLowerCase())) return true;
+      const closest = findClosest(normalized, values, "literal");
+      return levenshtein(normalized.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(normalized.length * 0.4));
     }
+    case "choice": {
+      const options = Array.isArray(syntax?.options) ? syntax.options : (Array.isArray(syntax?.value) ? syntax.value : []);
+      if (!options.length) return false;
+      const optionNames = options.map(o => String(o?.name ?? o?.value ?? "")).filter(Boolean);
+      if (optionNames.some(v => v.toLowerCase() === value.toLowerCase())) return true;
+      return options.some(option => {
+        const optionSyntaxes = Array.isArray(option.syntaxes) ? option.syntaxes : (Array.isArray(option.next) ? option.next : []);
+        const firstSyntax = optionSyntaxes?.[0];
+        return firstSyntax && isLikelySyntaxMatch(input, firstSyntax.type, firstSyntax);
+      });
+    }
+    case "command_tail": return true;
+    case "repeat": return true;
     case "playerselector":
     case "entityselector":
       return /^@/.test(value) || value.length > 0;
@@ -4963,13 +5157,68 @@ function fixArgument(typeDef, input) {
     case "playerselector":
     case "entityselector": return fixSelector(input);
 
-    case "enum": {
-      const vals = (typeDef?.value || []).map(v => v?.value ?? v);
-      return findClosest(input, vals, "enum");
+    case "choice": {
+      const vals = (typeDef?.options || typeDef?.value || []).map(v => v?.name ?? v?.value ?? v).filter(Boolean);
+      return vals.length ? findClosest(input, vals, "choice") : input;
     }
     case "json": return isValidJson(input) ? input : "{}";
+    case "command_tail": return input;
+    case "repeat": return input;
     default:     return input;
   }
+}
+
+function tryFixChoice(parts, index, choiceSyntax) {
+  if (!choiceSyntax || (!Array.isArray(choiceSyntax.options) && !Array.isArray(choiceSyntax.value))) return null;
+
+  const options = Array.isArray(choiceSyntax.options) ? choiceSyntax.options : choiceSyntax.value;
+  for (const option of options) {
+    const optionName = String(option?.name ?? option?.value ?? "");
+    const optionSyntaxes = Array.isArray(option.syntaxes) ? option.syntaxes : (Array.isArray(option.next) ? option.next : []);
+    let currentIndex = index;
+    const fixedParts = [];
+
+    if (optionName) {
+      if (currentIndex >= parts.length) continue;
+      const got = String(parts[currentIndex]).replace(/^\/+/, "");
+      if (got.toLowerCase() !== optionName.toLowerCase()) continue;
+      fixedParts.push(parts[currentIndex]);
+      currentIndex++;
+    }
+    let fixAvailable = false;
+    let success = true;
+
+    for (const optSyntax of optionSyntaxes) {
+      if (currentIndex >= parts.length) {
+        if (optSyntax.optional) continue;
+        success = false;
+        break;
+      }
+
+      const part = parts[currentIndex];
+      if (optSyntax.optional && !isLikelySyntaxMatch(part, optSyntax.type, optSyntax)) {
+        continue;
+      }
+
+      const fixed = fixArgument(optSyntax, part);
+      if (fixed !== part) fixAvailable = true;
+      fixedParts.push(fixed);
+      currentIndex++;
+
+      if (optSyntax.next && optSyntax.next.length > 0 && currentIndex < parts.length) {
+        const nested = fixSyntax(parts.slice(currentIndex), optSyntax.next, 0);
+        fixedParts.push(...nested.fixedParts);
+        if (nested.fixAvailable) fixAvailable = true;
+        currentIndex += nested.index;
+      }
+    }
+
+    if (success) {
+      return { fixedParts, fixAvailable, index: currentIndex };
+    }
+  }
+
+  return null;
 }
 
 function fixSyntax(parts, syntaxList, index = 0) {
@@ -4986,12 +5235,51 @@ function fixSyntax(parts, syntaxList, index = 0) {
       continue;
     }
 
+    if (syntax.type === "command_tail") {
+      fixedParts.push(parts.slice(index).join(" "));
+      index = parts.length;
+      break;
+    }
+
+    if (syntax.type === "repeat") {
+      const repeatSyntaxes = Array.isArray(syntax.syntaxes) ? syntax.syntaxes : [];
+      const min = Number.isFinite(+syntax.min) ? +syntax.min : 0;
+      const max = Number.isFinite(+syntax.max) ? +syntax.max : Number.MAX_SAFE_INTEGER;
+      let runs = 0;
+      while (index < parts.length && runs < max) {
+        const nested = fixSyntax(parts, repeatSyntaxes, index);
+        if (!nested || nested.index <= index) break;
+        fixedParts.push(...nested.fixedParts);
+        if (nested.fixAvailable) fixAvailable = true;
+        index = nested.index;
+        runs++;
+      }
+      if (runs < min) print(`[DEBUG] Repeat ${syntax.name || "repeat"} erwartet min ${min}, erhalten ${runs}`);
+      continue;
+    }
+
+    if (syntax.type === "choice") {
+      const choiceResult = tryFixChoice(parts, index, syntax);
+      if (choiceResult) {
+        fixedParts.push(...choiceResult.fixedParts);
+        if (choiceResult.fixAvailable) fixAvailable = true;
+        index = choiceResult.index;
+        continue;
+      }
+      if (syntax.optional) {
+        continue;
+      }
+      fixedParts.push(part);
+      index++;
+      continue;
+    }
+
     if (syntax.optional && !isLikelySyntaxMatch(part, syntax.type, syntax)) {
       print(`[DEBUG] Optionaler Syntax-Teil übersprungen: ${JSON.stringify(syntax)} Teil="${part}"`);
       continue;
     }
 
-    let fixed = fixArgument(syntax.type, part);
+    let fixed = fixArgument(syntax, part);
     if (fixed !== part) fixAvailable = true;
     fixedParts.push(fixed);
     index++;
@@ -5558,7 +5846,7 @@ function main_menu(player) {
     Main panel
   -------------------------*/
 
-  if (player.commandPermissionLevel < 2 && save_data[player_sd_index].allowed_commands.length == 0) {
+  if (player.commandPermissionLevel == 0 && save_data[player_sd_index].allowed_commands.length == 0) {
     form.label("§7There are no commands you are allowed to run! Ask your Admin.")
   } else {
 
@@ -5880,6 +6168,21 @@ async function execute_command(source, cmd, target = "server") {
 
   // agent remove command
   let real_cmd = cmd.replace(/agent remove/i, "agent tp ~ -100 ~");
+
+  if (cmd.includes("/seed")) {
+    const seed = world.seed;
+    source.sendMessage("World Seed: " + seed);
+
+    save_data[player_sd_index].command_history.push({
+      command: cmd,
+      successful: true,
+      unix: Date.now(),
+      hidden: false
+    });
+    update_save_data(save_data);
+
+    return true;
+  }
 
   try {
     let result = target === "server"
@@ -6621,8 +6924,39 @@ async function visual_command_generic(player, cmd) {
   async function processParts(parts) {
     for (const part of parts) {
       if (part.type === "literal") {
-        // literal: setzen oder anhängen
-        fullCommand = part.value;
+        appendToken(String(part.value || "").replace(/^\/+/, ""));
+
+      } else if (part.type === "command_tail") {
+        let result = await menu_text_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Enter command: ` + (part.name || "command"),
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+        }
+
+      } else if (part.type === "repeat") {
+        const repeatParts = Array.isArray(part.syntaxes) ? part.syntaxes : [];
+        const max = Number.isFinite(+part.max) ? +part.max : 12;
+        let count = 0;
+        while (count < max) {
+          const cont = await menu_actions_input(player, {
+            title: "Visual commands - " + cmd.name,
+            prompt: `Add ${part.name || "another clause"}?`,
+            actions: [{ id: "yes", name: "Add" }, { id: "no", name: "Continue" }],
+            optional: false
+          });
+          if (cont.canceled) return { canceled: true };
+          if (cont.response !== "yes") break;
+          const nestedRes = await processParts(repeatParts);
+          if (nestedRes && nestedRes.canceled) return { canceled: true };
+          count++;
+        }
 
       } else if (part.type === "location") {
         let result = await menu_location_input(player, {
@@ -6720,6 +7054,34 @@ async function visual_command_generic(player, cmd) {
           if (result.canceled) return { canceled: true };
           appendToken(result.response);
         }
+      } else if (part.type === "choice") {
+        const options = Array.isArray(part.options) ? part.options : (Array.isArray(part.value) ? part.value : []);
+        if (!options.length) continue;
+
+        const actions = options.map((option, idx) => ({
+          id: option.name || option.value || `choice_option_${idx}`,
+          name: option.name || option.value || `Option ${idx + 1}`
+        }));
+
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Choose option for ${part.name || "choice"}`,
+          actions,
+          optional: part.optional || false
+        });
+
+        if (result.skipped) {
+          break;
+        } else {
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+          const selectedOption = options.find((option, idx) => (option.name || option.value || `choice_option_${idx}`) === result.response);
+          const nestedSyntaxes = Array.isArray(selectedOption?.syntaxes) ? selectedOption.syntaxes : (Array.isArray(selectedOption?.next) ? selectedOption.next : []);
+          if (nestedSyntaxes.length) {
+            const nestedRes = await processParts(nestedSyntaxes);
+            if (nestedRes && nestedRes.canceled) return { canceled: true };
+          }
+        }
       } else if (part.type === "entityType") {
         const actions = EntityTypes.getAll()
           .sort((a, b) => a.id.localeCompare(b.id))
@@ -6754,36 +7116,6 @@ async function visual_command_generic(player, cmd) {
         } else {
           if (result.canceled) return { canceled: true };
           appendToken(result.response);
-        }
-      } else if (part.type === "enum") {
-        let result = await menu_actions_input(player, {
-          title: "Visual commands - " + cmd.name,
-          prompt: `Select the enum: ` + part.name,
-          actions: part.value,
-          optional: part.optional || false
-        });
-
-        if (result.skipped) {
-          break;
-        } else {
-          if (result.canceled) return { canceled: true };
-
-          // Anhängen der gewählten enum-Antwort
-          appendToken(result.response);
-
-          // Falls der ausgewählte enum-Eintrag ein `next` besitzt: sofort diese parts verarbeiten.
-          // Wir versuchen das option-Objekt zu finden (structure: { value: "...", next: [...] })
-          const selectedOption = Array.isArray(part.value)
-            ? part.value.find(opt => opt.value === result.response)
-            : null;
-
-          if (selectedOption && selectedOption.next && Array.isArray(selectedOption.next) && selectedOption.next.length) {
-            // Verarbeite next-Parts rekursiv
-            const nextRes = await processParts(selectedOption.next);
-            if (nextRes && nextRes.canceled) return { canceled: true };
-            // Nach Abschluss der `next`-Parts: unmittelbar ausführen und stoppen (wie gewünscht).
-            return { executeNow: true };
-          }
         }
       } else {
         let result = await menu_text_input(player, {
@@ -7420,7 +7752,7 @@ function settings_main(viewing_player, input_sd_index) {
 
   // Status
   const playerToCheck = is_admin_mode ? world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id) : null;
-  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel < 2)) {
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0)) {
     form.button("Status\n" + (save_data[player_sd_index].allow_menu ? "§aon" : "§coff"), save_data[player_sd_index].allow_menu ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
     actions.push(() => {
       if (!save_data[player_sd_index].allow_menu) {
@@ -7434,7 +7766,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Shortcuts
-  if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 2)) {
+  if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 1)) {
     form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
     actions.push(() => {
       settings_shortcuts(viewing_player, input_sd_index);
@@ -7472,8 +7804,8 @@ function settings_main(viewing_player, input_sd_index) {
       const aOnline = onlineIds.has(String(a.id));
       const bOnline = onlineIds.has(String(b.id));
 
-      const aOp = aOnline && playerMap.get(a.id)?.commandPermissionLevel >= 2;
-      const bOp = bOnline && playerMap.get(b.id)?.commandPermissionLevel >= 2;
+      const aOp = aOnline && playerMap.get(a.id)?.commandPermissionLevel >= 1;
+      const bOp = bOnline && playerMap.get(b.id)?.commandPermissionLevel >= 1;
 
       // 1️⃣ Online OP
       if (aOnline && bOnline) {
@@ -7537,7 +7869,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Commands
-  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel < 2)) {
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0)) {
     form.label("Commands");
     let label = save_data[player_sd_index].allowed_commands.length > 0 ? "§9" + save_data[player_sd_index].allowed_commands.length + " allowed commands" : "";
     form.button("Allowed commands\n" + label, "textures/ui/chat_send");

@@ -7,9 +7,9 @@ import { operatorMode } from "./mode.js"
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0 RR3",
-  build: "B054",
+  build: "B055",
   release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778872496372,
+  unix: 1778877510264,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -19,12 +19,14 @@ const version_info = {
       "Reintroduced /tp, /camera, and /execute commands",
       "Added /seed command for quick world-seed lookup",
       "Introduced visual command support for chain editing",
+      "Added a Rawtext Editor for visual command",
     ],
     // general_changes
     general_changes: [
       "Changelog now opens automatically after updating to a new version",
       "Refined command list coverage and updated command syntaxes",
       "Added an Environment section in About with hardware/platform details",
+      "Improved error handling and added more specific error messages for command execution failures",
     ],
     // bug_fixes
     bug_fixes: [
@@ -2372,9 +2374,9 @@ const command_list = [
       {
         type: "choice",
         options: [
-          { name: "title", syntaxes: [{ type: "string", name: "text" }] },
-          { name: "subtitle", syntaxes: [{ type: "string", name: "text" }] },
-          { name: "actionbar", syntaxes: [{ type: "string", name: "text" }] }
+          { name: "title", syntaxes: [] },
+          { name: "subtitle", syntaxes: [] },
+          { name: "actionbar", syntaxes: [] }
         ]
       },
       { type: "json", name: "message" }
@@ -3092,9 +3094,12 @@ system.run(() => {
                   }
                   // Falls der Key existiert, aber die Version nicht übereinstimmt
                   if (key === 'version' && target[key] !== defaults[key]) {
+                    const comparison = compareVersions(target[key], defaults[key]);
+                    if (comparison < 0) {
                       old_version = target[key]; // Alten Wert speichern
                       target[key] = defaults[key];
                       changes_made = true;
+                    }
                   }
               }
           }
@@ -4833,7 +4838,7 @@ function isLikelySyntaxMatch(input, typeDef, syntax) {
   if (input == null || input === "") return false;
   const typeName = (typeof typeDef === "string")
     ? typeDef.toLowerCase()
-    : ((typeDef && (typeDef.name || typeDef.type)) || "").toLowerCase();
+    : ((typeDef && (typeDef.type || typeDef.name)) || "").toLowerCase();
   const value = String(input).trim();
   if (value === "") return false;
 
@@ -4869,17 +4874,22 @@ function isLikelySyntaxMatch(input, typeDef, syntax) {
     case "repeat": return true;
     case "playerselector":
     case "entityselector":
-      return /^@/.test(value) || value.length > 0;
+      if (/^@/.test(value)) return true;
+      if (typeName === "playerselector") {
+        return world.getAllPlayers().some(p => p.name.toLowerCase() === value.toLowerCase());
+      }
+      return false;
     case "location":
       return isValidLocation(value) || /^~/.test(value);
     case "json":
       return isValidJson(value) || /^[\[{]/.test(value);
     case "int":
-      return /^-?\d+$/.test(value);
+      return /^[-+]?\d+$/.test(value) || /^[-+]?\d+/.test(value);
     case "float":
-      return !Number.isNaN(parseFloat(value));
+      return /^[-+]?\d*\.?\d+$/.test(value) || /^[-+]?\d*\.?\d+/.test(value);
     case "bool":
-      return /^(true|false)$/i.test(value);
+      if (/^(true|false)$/i.test(value)) return true;
+      return levenshtein(value.toLowerCase(), "true") <= 2 || levenshtein(value.toLowerCase(), "false") <= 2;
     default:
       return true;
   }
@@ -4891,10 +4901,39 @@ function fixSelector(input) {
     print(`[DEBUG] Selector "${input}" is in ${JSON.stringify(validSelectors)}.`);
     return input;
   }
+  if (typeof input === "string" && input.startsWith("@") && input.includes("[")) {
+    const selectorFixedType = input.replace(/type\s*=\s*([^\],\s]+)/i, (_m, typeId) => {
+      const normalizedType = String(typeId || "").replace(/^minecraft:/i, "");
+      const allTypes = getKeysFromGetAll(EntityTypes.getAll()).map(e => String(e).replace(/^minecraft:/i, ""));
+      const closest = findClosest(normalizedType, allTypes, "entitytype");
+      if (!closest) return `type=${typeId}`;
+      return `type=${closest}`;
+    });
+    return selectorFixedType;
+  }
   const playerNames = Array.from(world.getAllPlayers()).map(p => p.name);
   print(`[DEBUG] Available players: ${playerNames.join(", ")}`);
   const closestPlayer = findClosest(input, playerNames, "playerselector/entityselector");
   return closestPlayer || input;
+}
+
+function fixPlayerSelector(input) {
+  const validSelectors = ["@a", "@r", "@e", "@p", "@s"];
+  if (validSelectors.includes(input)) return input;
+  const raw = String(input || "").trim();
+  if (!raw) return input;
+  const playerNames = Array.from(world.getAllPlayers()).map(p => p.name);
+  if (!playerNames.length) return input;
+  const closestPlayer = findClosest(raw, playerNames, "playerselector");
+  return closestPlayer || input;
+}
+
+function fixEntitySelector(input) {
+  const validSelectors = ["@a", "@r", "@e", "@p", "@s"];
+  if (validSelectors.includes(input)) return input;
+  const raw = String(input || "").trim();
+  if (!raw.startsWith("@")) return input;
+  return fixSelector(raw);
 }
 
 function isValidLocation(input) {
@@ -4904,19 +4943,12 @@ function isValidLocation(input) {
 }
 
 function isValidJson(input) {
-  const stack = [];
-  const pairs = { "{": "}", "[": "]", "(": ")", '"': '"' };
-  for (let i = 0; i < input.length; i++) {
-    const char = input[i];
-    if (char === "\\" && i + 1 < input.length) { i++; continue; }
-    if ("{[(\"".includes(char)) stack.push(char);
-    else if ("}])\"".includes(char)) {
-      if (stack.length === 0) return false;
-      const last = stack.pop();
-      if (pairs[last] !== char) return false;
-    }
+  try {
+    JSON.parse(String(input));
+    return true;
+  } catch (_e) {
+    return false;
   }
-  return stack.length === 0;
 }
 
 function getKeysFromGetAll(getAllResult) {
@@ -4929,7 +4961,7 @@ function getKeysFromGetAll(getAllResult) {
 function fixArgument(typeDef, input) {
   const typeName = (typeof typeDef === "string")
     ? typeDef.toLowerCase()
-    : ((typeDef && (typeDef.name || typeDef.type)) || "").toLowerCase();
+    : ((typeDef && (typeDef.type || typeDef.name)) || "").toLowerCase();
 
   print(`[DEBUG] fixArgument: Typ="${typeName}" Input="${input}"`);
 
@@ -4945,7 +4977,15 @@ function fixArgument(typeDef, input) {
     return Object.keys(list || {});
   };
 
-  const safeNumber = (v, fallback) => Number.isFinite(+v) ? v : fallback;
+  const safeNumber = (v, fallback, preferInt = false) => {
+    if (Number.isFinite(+v)) return String(v);
+    const raw = String(v ?? "");
+    const intMatch = raw.match(/[-+]?\d+/);
+    if (preferInt && intMatch) return intMatch[0];
+    const floatMatch = raw.match(/[-+]?\d*\.?\d+/);
+    if (floatMatch) return floatMatch[0];
+    return fallback;
+  };
   const stripMinecraft = s => (typeof s === "string") ? s.replace(/^minecraft:/i, "") : s;
 
   switch (typeName) {
@@ -4960,9 +5000,15 @@ function fixArgument(typeDef, input) {
       return input;
     }
     case "string":   return /\s/.test(input) ? `"${input}"` : input;
-    case "int":      return safeNumber(input, "0");
-    case "float":    return safeNumber(input, "0.0");
-    case "bool":     return ["true","false"].includes(input?.toLowerCase()) ? input.toLowerCase() : "false";
+    case "int":      return safeNumber(input, "0", true);
+    case "float":    return safeNumber(input, "0.0", false);
+    case "bool": {
+      const raw = String(input || "").toLowerCase().trim();
+      if (raw === "true" || raw === "false") return raw;
+      const dTrue = levenshtein(raw, "true");
+      const dFalse = levenshtein(raw, "false");
+      return dTrue <= dFalse ? "true" : "false";
+    }
     case "location": return isValidLocation(input) ? input : "~ ~ ~";
 
     case "blocktype": {
@@ -4985,10 +5031,25 @@ function fixArgument(typeDef, input) {
     }
 
     case "enchanttype": return findClosest(input, extractStrings(EnchantmentTypes.getAll()), "enchanttype");
-    case "weathertype": return findClosest(input, extractStrings(WeatherType.getAll()), "weathertype");
+    case "weathertype": {
+      const weatherValues = [];
+      try {
+        if (typeof WeatherType?.getAll === "function") {
+          weatherValues.push(...extractStrings(WeatherType.getAll()));
+        }
+      } catch (_e) {}
+      weatherValues.push(...Object.values(WeatherType || {}).map(String));
+      const normalized = [...new Set(weatherValues.filter(Boolean).map(v => v.replace(/^minecraft:/i, "")))];
+      if (!normalized.length) return input;
+      return findClosest(String(input).replace(/^minecraft:/i, ""), normalized, "weathertype") || input;
+    }
+    case "gameruletype": {
+      const ruleNames = Object.keys(world.gameRules || {});
+      return ruleNames.length ? (findClosest(input, ruleNames, "gameruletype") || input) : input;
+    }
 
-    case "playerselector":
-    case "entityselector": return fixSelector(input);
+    case "playerselector": return fixPlayerSelector(input);
+    case "entityselector": return fixEntitySelector(input);
 
     case "choice": {
       const vals = (typeDef?.options || typeDef?.value || []).map(v => v?.name ?? v?.value ?? v).filter(Boolean);
@@ -4998,7 +5059,16 @@ function fixArgument(typeDef, input) {
       const vals = (Array.isArray(typeDef?.value) ? typeDef.value : []).map(v => String(v?.name ?? v?.value ?? v)).filter(Boolean);
       return vals.length ? findClosest(input, vals, "enum") : input;
     }
-    case "json": return isValidJson(input) ? input : "{}";
+    case "json": {
+      if (isValidJson(input)) return input;
+      const compact = String(input || "").trim();
+      const keyQuoted = compact
+        .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
+      if (isValidJson(keyQuoted)) return keyQuoted;
+      const normalizedQuotes = keyQuoted.replace(/'/g, "\"");
+      if (isValidJson(normalizedQuotes)) return normalizedQuotes;
+      return "{}";
+    }
     case "command_tail": return input;
     case "repeat": return input;
     default:     return input;
@@ -5011,48 +5081,22 @@ function tryFixChoice(parts, index, choiceSyntax) {
   const options = choiceSyntax.options;
   for (const option of options) {
     const optionName = String(option?.name ?? option?.value ?? "");
+    const isImplicitOption = option?.emit === false || !optionName;
     const optionSyntaxes = Array.isArray(option.syntaxes) ? option.syntaxes : (Array.isArray(option.next) ? option.next : []);
     let currentIndex = index;
     const fixedParts = [];
 
-    if (optionName) {
+    if (optionName && !isImplicitOption) {
       if (currentIndex >= parts.length) continue;
       const got = String(parts[currentIndex]).replace(/^\/+/, "");
       if (got.toLowerCase() !== optionName.toLowerCase()) continue;
       fixedParts.push(parts[currentIndex]);
       currentIndex++;
     }
-    let fixAvailable = false;
-    let success = true;
-
-    for (const optSyntax of optionSyntaxes) {
-      if (currentIndex >= parts.length) {
-        if (optSyntax.optional) continue;
-        success = false;
-        break;
-      }
-
-      const part = parts[currentIndex];
-      if (optSyntax.optional && !isLikelySyntaxMatch(part, optSyntax.type, optSyntax)) {
-        continue;
-      }
-
-      const fixed = fixArgument(optSyntax, part);
-      if (fixed !== part) fixAvailable = true;
-      fixedParts.push(fixed);
-      currentIndex++;
-
-      if (optSyntax.next && optSyntax.next.length > 0 && currentIndex < parts.length) {
-        const nested = fixSyntax(parts.slice(currentIndex), optSyntax.next, 0);
-        fixedParts.push(...nested.fixedParts);
-        if (nested.fixAvailable) fixAvailable = true;
-        currentIndex += nested.index;
-      }
-    }
-
-    if (success) {
-      return { fixedParts, fixAvailable, index: currentIndex };
-    }
+    const nested = fixSyntax(parts, optionSyntaxes, currentIndex);
+    if (nested.index <= currentIndex && optionSyntaxes.length > 0) continue;
+    fixedParts.push(...nested.fixedParts);
+    return { fixedParts, fixAvailable: nested.fixAvailable, index: nested.index };
   }
 
   return null;
@@ -5061,6 +5105,22 @@ function tryFixChoice(parts, index, choiceSyntax) {
 function fixSyntax(parts, syntaxList, index = 0) {
   const fixedParts = [];
   let fixAvailable = false;
+
+  const isCoordinateToken = (token) => {
+    const t = String(token || "").trim();
+    return /^[~^]?$/.test(t) || /^[~^]?[-+]?\d*\.?\d+$/.test(t);
+  };
+
+  const consumeLocation = (tokens, startIndex) => {
+    const picked = [];
+    let i = startIndex;
+    while (i < tokens.length && picked.length < 3 && isCoordinateToken(tokens[i])) {
+      picked.push(tokens[i]);
+      i++;
+    }
+    while (picked.length < 3) picked.push("~");
+    return { text: picked.join(" "), nextIndex: i };
+  };
 
   for (let i = 0; i < syntaxList.length && index < parts.length; i++) {
     const syntax = syntaxList[i];
@@ -5120,6 +5180,31 @@ function fixSyntax(parts, syntaxList, index = 0) {
       continue;
     }
 
+    if (syntax.type === "location") {
+      const loc = consumeLocation(parts, index);
+      const fixed = fixArgument(syntax, loc.text);
+      if (fixed !== loc.text) fixAvailable = true;
+      fixedParts.push(fixed);
+      index = loc.nextIndex;
+      continue;
+    }
+
+    if (syntax.type === "json") {
+      const rawJson = parts.slice(index).join(" ");
+      const fixed = fixArgument(syntax, rawJson);
+      if (fixed !== rawJson) fixAvailable = true;
+      fixedParts.push(fixed);
+      index = parts.length;
+      break;
+    }
+
+    if (!syntax.optional && !isLikelySyntaxMatch(part, syntax.type, syntax)) {
+      const tentativelyFixed = fixArgument(syntax, part);
+      if (!isLikelySyntaxMatch(tentativelyFixed, syntax.type, syntax)) {
+        break;
+      }
+    }
+
     if (syntax.optional && !isLikelySyntaxMatch(part, syntax.type, syntax)) {
       print(`[DEBUG] Optionaler Syntax-Teil übersprungen: ${JSON.stringify(syntax)} Teil="${part}"`);
       continue;
@@ -5145,43 +5230,185 @@ function fixSyntax(parts, syntaxList, index = 0) {
 function correctCommand(inputCommand) {
   print(`[DEBUG] Eingabe-Command: "${inputCommand}"`);
 
-  const trimmed = inputCommand.trim();
+  const trimmed = String(inputCommand || "").trim();
   const hadLeadingSlash = trimmed.startsWith("/");
-
-  // entferne genau ein führendes "/" (falls vorhanden) bevor wir splitten
   const withoutSlash = trimmed.replace(/^\//, "");
-  const parts = splitCommandParts(withoutSlash);
-  if (parts.length === 0) return { fix_available: false, command: inputCommand };
+  const rawParts = splitCommandParts(withoutSlash);
 
-  const cmdLiteral = parts[0].replace(/^minecraft:/i, ""); // jetzt ohne "/"
+  const baseResult = {
+    fix_available: false,
+    command: inputCommand,
+    feedback: {
+      confidence: "none",
+      summary: "No suggestion available.",
+      reasons: [],
+      changes: []
+    }
+  };
 
-  // Command-Namen / Alias via Levenshtein
+  if (rawParts.length === 0) {
+    baseResult.feedback.summary = "No command detected.";
+    return baseResult;
+  }
+
+  const cmdLiteralRaw = rawParts[0] || "";
+  const cmdLiteral = cmdLiteralRaw.replace(/^minecraft:/i, "");
   const commandNames = command_list.map(c => c.name).concat(command_list.flatMap(c => c.aliases || []));
   const closestCommandName = findClosestCommandName(cmdLiteral, commandNames);
   const command = closestCommandName
     ? command_list.find(c => c.name === closestCommandName || (c.aliases || []).includes(closestCommandName))
     : null;
 
-  if (!command) return { fix_available: false, command: inputCommand };
+  if (!command) {
+    baseResult.feedback.summary = `Unknown command "${cmdLiteralRaw}".`;
+    baseResult.feedback.reasons.push("No reliable command match found.");
+    return baseResult;
+  }
 
-  const commandFixAvailable = closestCommandName && closestCommandName.toLowerCase() !== cmdLiteral.toLowerCase();
+  const inputParts = rawParts.slice();
+  const commandTokenBefore = inputParts[0];
+  const normalizedCommandToken = command.name;
+  const commandFixAvailable = normalizedCommandToken.toLowerCase() !== cmdLiteral.toLowerCase();
 
-  print(`[DEBUG] Gefundener Command: "${command.name}"`);
+  const syntaxInputParts = rawParts.slice();
+  let preNormalizedFixAvailable = false;
+  let reinjectEffectGive = false;
 
-  // Ersetze das erste Token durch den 'korrekten' Command-Namen (wichtig!)
-  parts[0] = command.name;
+  syntaxInputParts[0] = normalizedCommandToken;
 
-  const { fixedParts, fixAvailable: syntaxFixAvailable } = fixSyntax(parts, command.syntaxes);
-  const fixAvailable = syntaxFixAvailable || commandFixAvailable;
-  const fixedCommand = (hadLeadingSlash ? "/" : "") + fixedParts.join(" ");
+  function normalizeRawtextPayload(rawInput) {
+    const raw = String(rawInput || "").trim();
+    if (!raw) return "{\"rawtext\":[{\"text\":\"\"}]}";
+
+    const wrapAsText = (text) => JSON.stringify({ rawtext: [{ text: String(text ?? "") }] });
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.rawtext)) {
+        return JSON.stringify(parsed);
+      }
+      if (parsed && typeof parsed === "object" && (parsed.text != null || parsed.selector != null || parsed.score != null || parsed.translate != null)) {
+        return JSON.stringify({ rawtext: [parsed] });
+      }
+      return JSON.stringify({ rawtext: [parsed] });
+    } catch (_e) {}
+
+    const keyQuoted = raw.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
+    try {
+      const parsed = JSON.parse(keyQuoted);
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.rawtext)) return JSON.stringify(parsed);
+      if (parsed && typeof parsed === "object") return JSON.stringify({ rawtext: [parsed] });
+    } catch (_e) {}
+
+    const textMatch = raw.match(/["']?text["']?\s*:\s*["']([^"']*)["']/i);
+    if (textMatch && textMatch[1] != null) return wrapAsText(textMatch[1]);
+
+    const trimmedString = raw.replace(/^["']|["']$/g, "");
+    return wrapAsText(trimmedString);
+  }
+
+  if (command.name === "tellraw" && syntaxInputParts.length >= 3) {
+    const tellrawRaw = syntaxInputParts.slice(2).join(" ").trim();
+    const normalized = normalizeRawtextPayload(tellrawRaw);
+    if (normalized !== tellrawRaw) preNormalizedFixAvailable = true;
+    syntaxInputParts.splice(2, syntaxInputParts.length - 2, normalized);
+  }
+  if (command.name === "titleraw" && syntaxInputParts.length >= 4) {
+    const titleRaw = syntaxInputParts.slice(3).join(" ").trim();
+    const normalized = normalizeRawtextPayload(titleRaw);
+    if (normalized !== titleRaw) preNormalizedFixAvailable = true;
+    syntaxInputParts.splice(3, syntaxInputParts.length - 3, normalized);
+  }
+  const { fixedParts, fixAvailable: syntaxFixAvailable } = fixSyntax(syntaxInputParts, command.syntaxes);
+  if (command.name === "gamerule" && fixedParts.length >= 3) {
+    const rule = fixedParts[1];
+    const currentValue = world.gameRules?.[rule];
+    if (typeof currentValue === "boolean") {
+      const oldVal = fixedParts[2];
+      fixedParts[2] = fixArgument("bool", fixedParts[2]);
+      if (oldVal !== fixedParts[2]) {
+        fixedParts._gameruleBoolFixed = true;
+      }
+    } else if (typeof currentValue === "number") {
+      const oldVal = fixedParts[2];
+      fixedParts[2] = fixArgument("int", fixedParts[2]);
+      if (oldVal !== fixedParts[2]) {
+        fixedParts._gameruleBoolFixed = true;
+      }
+    } else {
+      const rawVal = String(fixedParts[2] || "");
+      const boolCandidate = fixArgument("bool", rawVal);
+      const boolLike = /^(true|false)$/i.test(rawVal) ||
+        levenshtein(rawVal.toLowerCase(), "true") <= 2 ||
+        levenshtein(rawVal.toLowerCase(), "false") <= 2;
+      if (boolLike && rawVal !== boolCandidate) {
+        fixedParts[2] = boolCandidate;
+        fixedParts._gameruleBoolFixed = true;
+      }
+    }
+  }
+  const fixAvailable = preNormalizedFixAvailable || syntaxFixAvailable || commandFixAvailable || !!fixedParts._gameruleBoolFixed;
+  let fixedCommandParts = fixedParts.slice();
+  if (reinjectEffectGive) {
+    fixedCommandParts = [fixedCommandParts[0], "give", ...fixedCommandParts.slice(1)];
+  }
+  const fixedCommand = (hadLeadingSlash ? "/" : "") + fixedCommandParts.join(" ");
+
+  const changes = [];
+  if (commandFixAvailable) {
+    changes.push({
+      type: "command",
+      before: commandTokenBefore,
+      after: command.name,
+      reason: "Closest valid command name"
+    });
+  }
+
+  const comparableLength = Math.min(syntaxInputParts.length, fixedParts.length);
+  for (let i = 1; i < comparableLength; i++) {
+    if (syntaxInputParts[i] !== fixedParts[i]) {
+      changes.push({
+        type: "argument",
+        index: i,
+        before: syntaxInputParts[i],
+        after: fixedParts[i],
+        reason: "Adjusted to expected argument type"
+      });
+    }
+  }
+
+  const reasons = [];
+  if (!hadLeadingSlash) reasons.push("Input has no leading slash.");
+  if (commandFixAvailable) reasons.push(`Command token matched to "${command.name}".`);
+  if (preNormalizedFixAvailable) reasons.push("Raw JSON was normalized to Bedrock rawtext format.");
+  if (syntaxFixAvailable) reasons.push("One or more arguments were corrected.");
+
+  const confidence = !fixAvailable
+    ? "exact"
+    : (commandFixAvailable && syntaxFixAvailable ? "medium" : "high");
 
   print(`[DEBUG] Korrigierter Command: "${fixedCommand}" fix_available=${fixAvailable}`);
 
-  // vc_hiperlink hinzufügen, wenn vorhanden
-  const result = { fix_available: fixAvailable, command: fixedCommand };
+  const result = {
+    fix_available: fixAvailable,
+    command: fixedCommand,
+    feedback: {
+      confidence,
+      summary: fixAvailable
+        ? `Suggestion available (${changes.length} change${changes.length === 1 ? "" : "s"}).`
+        : "Command looks already valid.",
+      reasons,
+      changes
+    }
+  };
 
-  result.vc_hiperlink = (player) => isVisualCommandAvailable(player, command);
-
+  result.vc_hiperlink = (player) => {
+    const vc = isVisualCommandAvailable(player, command);
+    if (typeof vc === "function") {
+      return vc(player);
+    }
+    return visual_command_generic(player, command);
+  };
   result.visible = (player) => isCommandAvailable(player, `/${command.name}`);
   if (typeof command.visible === "function") {
     result.visible = (player) => command.visible(player);
@@ -5189,9 +5416,32 @@ function correctCommand(inputCommand) {
     result.visible = command.visible;
   }
 
-
-
   return result;
+}
+
+function formatSuggestionFeedbackLines(suggestion) {
+  const lines = [];
+  const feedback = suggestion?.feedback;
+  if (!feedback) return lines;
+
+  if (feedback.summary) lines.push(`Summary: ${feedback.summary}`);
+  if (feedback.confidence) lines.push(`Confidence: ${feedback.confidence}`);
+
+  if (Array.isArray(feedback.reasons) && feedback.reasons.length) {
+    for (const reason of feedback.reasons.slice(0, 3)) {
+      lines.push(`- ${reason}`);
+    }
+  }
+
+  if (Array.isArray(feedback.changes) && feedback.changes.length) {
+    for (const change of feedback.changes.slice(0, 4)) {
+      const before = String(change.before ?? "");
+      const after = String(change.after ?? "");
+      lines.push(`- ${before} -> ${after}`);
+    }
+  }
+
+  return lines;
 }
 
 /*------------------------
@@ -5451,28 +5701,64 @@ function compareVersions(version1, version2) {
   version1 = version1.replace(/^v\./i, '').trim();
   version2 = version2.replace(/^v\./i, '').trim();
 
-  // Extrahiere Beta-Nummer aus "_1" oder " Beta 1"
-  function extractBeta(version) {
+  // Extrahiere Beta-Nummer oder Suffix (z. B. "(Beta 1)" oder "(RR3)")
+  function extractParts(version) {
+    // Suche nach Beta in Klammern: "(Beta 1)"
+    const betaInParentheses = version.match(/^(.*?)\s*\(Beta\s*(\d+)\)$/i);
+    if (betaInParentheses) {
+      return {
+        base: betaInParentheses[1].trim(),
+        beta: parseInt(betaInParentheses[2], 10),
+        suffix: null,
+        suffixNumber: null
+      };
+    }
+    // Suche nach Suffix in Klammern: "(RR3)"
+    const suffixInParentheses = version.match(/^(.*?)\s*\(([A-Za-z]+)(\d+)\)$/);
+    if (suffixInParentheses) {
+      return {
+        base: suffixInParentheses[1].trim(),
+        beta: null,
+        suffix: suffixInParentheses[2].toUpperCase(),
+        suffixNumber: parseInt(suffixInParentheses[3], 10)
+      };
+    }
+    // Suche nach Beta ohne Klammern: "Beta 1" oder "_1"
     const betaMatch = version.match(/^(.*?)\s*(?:_|\sBeta\s*)(\d+)$/i);
     if (betaMatch) {
       return {
         base: betaMatch[1].trim(),
-        beta: parseInt(betaMatch[2], 10)
+        beta: parseInt(betaMatch[2], 10),
+        suffix: null,
+        suffixNumber: null
       };
     }
+    // Suche nach Suffix ohne Klammern: "RR3"
+    const suffixMatch = version.match(/^(.*?)\s*([A-Za-z]+)(\d+)$/);
+    if (suffixMatch) {
+      return {
+        base: suffixMatch[1].trim(),
+        beta: null,
+        suffix: suffixMatch[2].toUpperCase(),
+        suffixNumber: parseInt(suffixMatch[3], 10)
+      };
+    }
+    // Kein Beta oder Suffix
     return {
       base: version,
-      beta: null
+      beta: null,
+      suffix: null,
+      suffixNumber: null
     };
   }
 
-  const v1 = extractBeta(version1);
-  const v2 = extractBeta(version2);
+  const v1 = extractParts(version1);
+  const v2 = extractParts(version2);
 
+  // Vergleiche Hauptversion (Major.Minor.Patch)
   const v1Parts = v1.base.split('.').map(Number);
   const v2Parts = v2.base.split('.').map(Number);
 
-  // Vergleicht Major, Minor, Patch
   for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
     const num1 = v1Parts[i] || 0;
     const num2 = v2Parts[i] || 0;
@@ -5480,16 +5766,25 @@ function compareVersions(version1, version2) {
     if (num1 < num2) return -1;
   }
 
-  // Wenn gleich, vergleiche Beta
+  // Wenn Hauptversion gleich: Vergleiche Beta
   if (v1.beta !== null && v2.beta === null) return -1; // Beta < Vollversion
   if (v1.beta === null && v2.beta !== null) return 1;  // Vollversion > Beta
-
   if (v1.beta !== null && v2.beta !== null) {
     if (v1.beta > v2.beta) return 1;
     if (v1.beta < v2.beta) return -1;
   }
 
-  return 0;
+  // Wenn Beta gleich oder nicht vorhanden: Vergleiche Suffix
+  if (v1.suffix !== null && v2.suffix === null) return -1; // Suffix < keine Suffix
+  if (v1.suffix === null && v2.suffix !== null) return 1;  // keine Suffix > Suffix
+  if (v1.suffix !== null && v2.suffix !== null) {
+    if (v1.suffix > v2.suffix) return 1;
+    if (v1.suffix < v2.suffix) return -1;
+    if (v1.suffixNumber > v2.suffixNumber) return 1;
+    if (v1.suffixNumber < v2.suffixNumber) return -1;
+  }
+
+  return 0; // Versionen sind gleich
 }
 
 /*------------------------
@@ -5717,7 +6012,7 @@ function main_menu(player) {
         } else {
           command_menu(player, output.command, null, output.menu);
         }
-      }, { from_main_menu: true });
+      }, { from_main_menu: true, recommendVisible: !recommendVisible });
     });
 
     if (canPlayerUseChains(player)) {
@@ -6102,6 +6397,10 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
 
   if (suggestion && suggestion.fix_available) {
     form.label("Did you mean:\n§a§o§7" + suggestion.command);
+    const feedbackLines = formatSuggestionFeedbackLines(suggestion);
+    if (feedbackLines.length) {
+      form.label("Why this suggestion:\n§7" + feedbackLines.join("\n"));
+    }
   }
 
   form.divider();
@@ -6624,6 +6923,7 @@ function visual_command(player, on_output, options = {}) {
   let actions = [];
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+  const recommendVisible = options.recommendVisible ?? true;
   const fromMainMenu = options?.from_main_menu === true;
 
   form.title("New Command");
@@ -6663,7 +6963,7 @@ function visual_command(player, on_output, options = {}) {
   const {recommendedEntries, allEntries, categoryLists} = generate_command_lists(player, on_output);
 
   // --- Recommended ---
-  if (recommendedEntries.length) {
+  if (recommendedEntries.length && recommendVisible) {
     form.label("Recommended");
 
     const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
@@ -6810,6 +7110,95 @@ async function visual_command_generic(player, cmd, on_output) {
     fullCommand += (fullCommand ? " " : "") + token;
   }
 
+  async function visual_rawtext_builder(player, cmdName, optional = false) {
+    const components = [];
+    while (true) {
+      const requireTypeSelection = components.length === 0;
+      const pick = await menu_actions_input(player, {
+        title: "Visual commands - " + cmdName,
+        prompt: requireTypeSelection
+          ? "Choose at least one rawtext component type"
+          : "Add another rawtext component (optional)",
+        actions: [
+          { id: "text", name: "Text" },
+          { id: "selector", name: "Selector" },
+          { id: "score", name: "Score" },
+          { id: "translate", name: "Translate" }
+        ],
+        optional: requireTypeSelection ? false : true
+      });
+      if (pick.canceled) return { canceled: true };
+      if (pick.skipped) break;
+
+      if (pick.response === "text") {
+        const textIn = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Text value",
+          optional: false
+        });
+        if (textIn.canceled) return { canceled: true };
+        components.push({ text: String(textIn.response || "") });
+        continue;
+      }
+
+      if (pick.response === "selector") {
+        const selIn = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Selector (e.g. @s, @a[name=...] )",
+          defaultValue: "@s",
+          optional: false
+        });
+        if (selIn.canceled) return { canceled: true };
+        components.push({ selector: String(selIn.response || "@s") });
+        continue;
+      }
+
+      if (pick.response === "score") {
+        const scoreName = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Score holder name",
+          defaultValue: "*",
+          optional: false
+        });
+        if (scoreName.canceled) return { canceled: true };
+        const scoreObj = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Score objective",
+          optional: false
+        });
+        if (scoreObj.canceled) return { canceled: true };
+        components.push({ score: { name: String(scoreName.response || "*"), objective: String(scoreObj.response || "") } });
+        continue;
+      }
+
+      if (pick.response === "translate") {
+        const trKey = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Translation key/text",
+          optional: false
+        });
+        if (trKey.canceled) return { canceled: true };
+        const withInput = await menu_text_input(player, {
+          title: "Visual commands - " + cmdName,
+          prompt: "Optional 'with' values (comma separated)",
+          optional: true
+        });
+        if (withInput.canceled) return { canceled: true };
+        const trComp = { translate: String(trKey.response || "") };
+        if (!withInput.skipped && String(withInput.response || "").trim()) {
+          trComp.with = String(withInput.response).split(",").map(s => s.trim()).filter(Boolean);
+        }
+        components.push(trComp);
+      }
+    }
+
+    if (components.length === 0) {
+      if (optional) return { skipped: true };
+      components.push({ text: "" });
+    }
+    return { response: JSON.stringify({ rawtext: components }) };
+  }
+
   async function processParts(parts) {
     let requestRepeatExit = false;
     let canExitLoop = false;
@@ -6939,7 +7328,7 @@ async function visual_command_generic(player, cmd, on_output) {
         appendToken(result.response);
         continue;
       }
-      if (part.type === "weatherType") {
+      if (part.type === "weathertype") {
         const actions = [
           { id: "clear", name: "Sunny (clear)", icon: "textures/ui/weather_clear" },
           { id: "rain", name: "Rain", icon: "textures/ui/weather_rain" },
@@ -7028,6 +7417,24 @@ async function visual_command_generic(player, cmd, on_output) {
           title: "Visual commands - " + cmd.name,
           prompt: `What entity do you mean for ` + part.name,
           actions,
+          optional: part.optional || false
+        });
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
+        continue;
+      }
+      if (part.type === "json") {
+        if (cmd.name === "tellraw" || cmd.name === "titleraw") {
+          const result = await visual_rawtext_builder(player, cmd.name, part.optional || false);
+          if (result.skipped) break;
+          if (result.canceled) return { canceled: true };
+          appendToken(result.response);
+          continue;
+        }
+        let result = await menu_text_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Enter JSON: ` + part.name,
           optional: part.optional || false
         });
         if (result.skipped) break;

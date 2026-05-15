@@ -1,27 +1,54 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "header": {
       "description": "Normally, you can't execute commands in without losing achievements. That's where this add-on comes in, allowing you to execute commands comfortably via a small detour!",
       "name": "Command&Achievement",
       "uuid": "a9bdf889-7080-419c-b23c-adfc8704c4c1",
-      "version": [ 7, 1, 0],
-      "min_engine_version": [1, 21, 120]
+      "version": "7.1.0",
+      "min_engine_version": "1.21.120"
   },
   "modules": [
     {
         "description": "",
         "type": "data",
         "uuid": "e11ee04d-d3f8-4b79-8ac0-40d93a0881f0",
-        "version": [1, 0, 0]
+        "version": "1.0.0"
     },
     {
       "description": "",
         "type": "script",
         "uuid": "7614c31a-7188-47ed-bc87-b18fc55ef8a5",
-        "version": [1, 0, 0],
+        "version": "1.0.0",
         "entry": "scripts/main.js"
     }
   ],
+  // Using old subpacks until Minecraft releases the world.getPackSettings() API, will be removed in the future
+  "subpacks": [
+      {
+          "folder_name": "op_on",
+          "name": "Operator Mode on\n§7(Only operators can use the command)",
+          "memory_performance_tier": 0
+      },
+      {
+          "folder_name": "op_off",
+          "name": "Operator Mode off\n§7(Anyone can use the command, but be careful when giving permissions to other players!)",
+          "memory_performance_tier": 0
+      }
+  ],
+  /*
+  "settings": [
+    {
+      "type": "toggle",
+      "text": "Operator Mode",
+      "name": "com2hard:operator_mode",
+      "default": true
+    },
+    {
+      "type": "label",
+      "text": "§7Explanation: When enabled, only operators can use the command. When disabled, operators can give the permission to use a command to other players, but be careful when doing so!"
+    }
+  ],
+  */
   "dependencies": [
     {
       "module_name":"@minecraft/server",
@@ -31,8 +58,12 @@
       "module_name": "@minecraft/server-ui",
       "version": "2.0.0"
     }
- ],
+  ],
+
   "metadata": {
+    "authors": ["TheFelixLive"],
+    "license": "MIT",
+    "url": "https://github.com/TheFelixLive/CommandandAchievements",
     "product_type": "addon"
   }
 }

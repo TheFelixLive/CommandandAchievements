@@ -1,18 +1,21 @@
 ﻿import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus} from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/server-ui"
+import { operatorMode } from "./mode.js"
 
+// let operatorMode = world.getPackSettings()[com2hard:operator_mode]; // Will be enabled in the future when the API is available, for now it is determined by the subpack
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.7.1.0",
-  build: "B052",
+  version: "v.7.1.0 RR3",
+  build: "B053",
   release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778792197583,
+  unix: 1778855587078,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
+      "Added Operator Mode to hide commands from non-operator players.",
       "Reintroduced /tp, /camera, and /execute commands",
       "Added /seed command for quick world-seed lookup",
       "Introduced visual command support for chain editing",
@@ -1514,7 +1517,6 @@ const command_list = [
       // optional: Ziel-Spieler/Targets
       { type: "playerselector", name: "targets", optional: true },
 
-      // Hauptaktionen als enum; jede Aktion kann eigene Next-Parameter haben
       {
         type: "choice",
         options: [
@@ -3034,7 +3036,7 @@ system.afterEvents.scriptEventReceive.subscribe(async event=> {
     }
 
     // Will open the main menu of your addon
-    if (data.event == "mm_open" && data.data.target == version_info.uuid && canPlayerUseMenu(player)) {
+    if (data.event == "mm_open" && data.data.target == version_info.uuid && canPlayerUseMenu(player) && (operatorMode? player.commandPermissionLevel >= 1 : true)) {
         main_menu(player);
         world.scoreboard.removeObjective("mm_data")
     }
@@ -3144,7 +3146,7 @@ function registerAllCommands(init) {
 
   function registerMenuCommand({ name, description, handler }) {
     init.customCommandRegistry.registerCommand(
-      { name, description, permissionLevel: CommandPermissionLevel.Any, cheatsRequired: false },
+      { name, description, permissionLevel: operatorMode? 1 : 0, cheatsRequired: false },
       ({ sourceEntity }) => {
         if (!isPlayer(sourceEntity)) return failPlayerOnly;
 
@@ -3207,7 +3209,7 @@ function registerAllCommands(init) {
   registerMenuCommand({
     name: "com2hard:vc",
     description: "Opens the Visual Command menu",
-    permissionLevel: CommandPermissionLevel.Any,
+    permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
       const e = load_save_data().find(d => d.id === p.id);
@@ -3222,17 +3224,17 @@ function registerAllCommands(init) {
   registerMenuCommand({
     name: "com2hard:menu",
     description: "Opens the Main menu",
-    permissionLevel: CommandPermissionLevel.Any,
+    permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
-      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) ? main_menu(p) : null);
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? main_menu(p) : null);
     }
   });
 
   registerMenuCommand({
     name: "com2hard:history",
     description: "Opens the History menu",
-    permissionLevel: CommandPermissionLevel.Any,
+    permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
       system.run(() => command_history_menu(p));
@@ -3242,7 +3244,7 @@ function registerAllCommands(init) {
   registerMenuCommand({
     name: "com2hard:settings",
     description: "Opens the Settings menu",
-    permissionLevel: CommandPermissionLevel.Any,
+    permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
       system.run(() => settings_main(p));
@@ -3256,7 +3258,7 @@ function registerAllCommands(init) {
   init.customCommandRegistry.registerCommand({
       name: "com2hard:chain",
       description: "Executes a specified command chain",
-      permissionLevel: CommandPermissionLevel.Any,
+      permissionLevel: operatorMode? 1 : 0,
       cheatsRequired: false,
       optionalParameters: [
         { type: CustomCommandParamType.Integer, name: "chainIndex" },
@@ -3303,7 +3305,7 @@ function registerAllCommands(init) {
           {
             name: `com2hard:${alias}`,
             description: cmd.description ?? "",
-            permissionLevel: CommandPermissionLevel.Any,
+            permissionLevel: operatorMode? 1 : 0,
             cheatsRequired: false,
             mandatoryParameters: mandatory,
             optionalParameters: optional
@@ -3359,6 +3361,10 @@ system.run(() => {
           for (const key in defaults) {
               if (defaults.hasOwnProperty(key)) {
                   if (!target.hasOwnProperty(key)) {
+                      // Key existiert nicht in target → Fallback für old_version setzen
+                      if (key === 'version') {
+                          old_version = "unknown"; // oder z. B. "0.0.0"
+                      }
                       target[key] = defaults[key];
                       changes_made = true;
                   } else if (typeof defaults[key] === 'object' && defaults[key] !== null && !Array.isArray(defaults[key])) {
@@ -3369,10 +3375,12 @@ system.run(() => {
                           merge_defaults(target[key], defaults[key]);
                       }
                   }
-                if (key === 'version' && target[key] !== defaults[key]) {
-                    old_version = target[key];
-                    target[key] = defaults[key];
-                }
+                  // Falls der Key existiert, aber die Version nicht übereinstimmt
+                  if (key === 'version' && target[key] !== defaults[key]) {
+                      old_version = target[key]; // Alten Wert speichern
+                      target[key] = defaults[key];
+                      changes_made = true;
+                  }
               }
           }
       }
@@ -3731,7 +3739,7 @@ function create_player_save_data(playerId, playerName) {
     // Player is online
 
     world.getAllPlayers().forEach(player => {
-      if (player.commandPermissionLevel >= 1 && player.id !== playerId) {
+      if (player.commandPermissionLevel >= 1 && player.id !== playerId && !operatorMode && save_data[player_sd_index].allowed_commands.length === 0) {
         player.sendMessage("§l§6[§eHelp§6]§r "+ playerName +" does not have permission to execute any command. This can now be changed in §lSettings -> Permission -> "+ playerName +"§r§f")
         player.playSound("random.pop")
       }
@@ -3850,8 +3858,12 @@ world.afterEvents.playerSpawn.subscribe(async (eventData) => {
   await system.waitTicks(40); // Wait for the player to be fully joined
 
   // Beta Feedback Request
-  if (version_info.release_type !== 2 && player.commandPermissionLevel >= 1) {
+  if (version_info.release_type !== 2 && playerIsAdmin(player)) {
     player.sendMessage("§l§7[§fSystem§7]§r "+ save_data[player_sd_index].name +" how is your experiences with "+ version_info.version +"? Does it meet your expectations? Would you like to change something and if so, what? Do you have a suggestion for a new feature? Share it at §l"+links[0].link)
+  }
+
+  if (old_version && playerIsAdmin(player)) {
+    player.sendMessage("§l§1[§9Update§1]§r "+ version_info.name +" was updated from "+ old_version +" to "+ version_info.version +". If you encounter any issues, please report them at §l"+links[0].link)
   }
 
   // Help reminders
@@ -3876,7 +3888,7 @@ world.beforeEvents.itemUse.subscribe(event => {
       system.run(() => {
         if (system_privileges !== 0) {
           event.source.playSound("random.pop2")
-          system_privileges == 1 ? multiple_menu(event.source) : canPlayerUseMenu(event.source) ? main_menu(event.source) : null;
+          system_privileges == 1 ? multiple_menu(event.source) : canPlayerUseMenu(event.source) && (operatorMode ? event.source.commandPermissionLevel >= 1 : true) ? main_menu(event.source) : null;
         }
       });
   }
@@ -3907,7 +3919,7 @@ async function gesture_jump() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.sneak && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? main_menu(player) : null;
       }
 
       gestureCooldowns_jump.set(player.id, now);
@@ -3941,7 +3953,7 @@ async function gesture_emote() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.emote && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? main_menu(player) : null;
       }
 
       gestureCooldowns_emote.set(player.id, now);
@@ -3978,7 +3990,7 @@ async function gesture_nod() {
       const idx = save_data.findIndex(e => e.id === player.id);
       if (save_data[idx].gesture.nod && system_privileges !== 0) {
         player.playSound("random.pop2")
-        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) ? main_menu(player) : null;
+        system_privileges == 1 ? multiple_menu(player) : canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? main_menu(player) : null;
       }
 
       state = "idle";
@@ -4968,7 +4980,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
       continue;
     }
 
-    if (syn.type === "choice" || syn.type === "repeat" || syn.type === "command_tail" || syn.type === "exit_loop" || syn.type === "can_exit_loop") {
+    if (syn.type === "repeat" || syn.type === "command_tail" || syn.type === "exit_loop" || syn.type === "can_exit_loop") {
       system.run(() => print(`Syntax-Element 'choice' in command '${cmd.name}' wird nicht in CustomCommandParamType abgebildet.`));
       continue;
     }
@@ -4977,7 +4989,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
     if (syn.type === "effecttype" || syn.type === "enchanttype" || syn.type === "weathertype") {
       const enumKey = enumsDynamic && enumsDynamic[syn.type];
       if (enumKey) {
-        const param = { type: CustomCommandParamType.Enum, name: syn.name, enumName: enumKey, optional: !!syn.optional };
+        const param = { type: CustomCommandParamType.Enum, name: enumKey, optional: !!syn.optional };
         (param.optional ? optional : mandatory).push(param);
         continue;
       } else {
@@ -6019,7 +6031,7 @@ function main_menu(player) {
           multipage_time_menu(
             player,
             generate_history_entries(player),
-            canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+            canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null
           );
         });
       }
@@ -6061,7 +6073,7 @@ function main_menu(player) {
       multipage_time_menu(
         player,
         generate_history_entries(player),
-        canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+        canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null
       );
     });
   }
@@ -6144,7 +6156,7 @@ function command_menu(player, command, history_index, on_success_menu) {
         ? multipage_time_menu(
             player,
             generate_history_entries(player),
-            canPlayerUseMenu(player) ? (p) => main_menu(p) : null
+            canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null
           )
         : visual_command(player);
     }
@@ -7906,7 +7918,7 @@ function settings_main(viewing_player, input_sd_index) {
 
   // Status
   const playerToCheck = is_admin_mode ? world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id) : null;
-  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0)) {
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0) && !operatorMode) {
     form.button("Status\n" + (save_data[player_sd_index].allow_menu ? "§aon" : "§coff"), save_data[player_sd_index].allow_menu ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
     actions.push(() => {
       if (!save_data[player_sd_index].allow_menu) {
@@ -7920,7 +7932,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Shortcuts
-  if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 1)) {
+  if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 1) && (!is_admin_mode || !operatorMode)) {
     form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
     actions.push(() => {
       settings_shortcuts(viewing_player, input_sd_index);
@@ -7939,6 +7951,8 @@ function settings_main(viewing_player, input_sd_index) {
     });
   } else if (!is_admin_mode) {
     form.label("§7The Main menu is currently disabled.");
+  } else if (operatorMode) {
+    form.label("§7Restrictions cannot be applied in operator mode.");
   } else {
     form.label("§7Restrictions cannot be applied to a(n) "+CommandPermissionLevel[world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id).commandPermissionLevel] + " player.");
   }
@@ -8023,7 +8037,7 @@ function settings_main(viewing_player, input_sd_index) {
   }
 
   // Commands
-  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0)) {
+  if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0) && !operatorMode) {
     form.label("Commands");
     let label = save_data[player_sd_index].allowed_commands.length > 0 ? "§9" + save_data[player_sd_index].allowed_commands.length + " allowed commands" : "";
     form.button("Allowed commands\n" + label, "textures/ui/chat_send");
@@ -9067,7 +9081,8 @@ function dictionary_about(player, show_ip = false) {
   form.body("§lGeneral")
   form.label(
     "Name: " + version_info.name+ "\n"+
-    "UUID: "+ version_info.uuid
+    "UUID: "+ version_info.uuid+ "\n"+
+    "Operator Mode: " + (operatorMode? "§aYes" : "§cNo")
   )
 
   form.label("§lEnvironment")

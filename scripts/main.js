@@ -7,9 +7,9 @@ import { operatorMode } from "./mode.js"
 const version_info = {
   name: "Command&Achievement",
   version: "v.7.1.0 RR3",
-  build: "B053",
+  build: "B054",
   release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778855587078,
+  unix: 1778872496372,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -405,13 +405,10 @@ const entity_blocklist = [
     id: "minecart"
   },
   {
-    id: "npc"
-  },
-  {
     id: "ominous_item_spawner"
   },
   {
-    id: "player" // Technically I could do player as goal but it could result to a soft lock if the selected player leaves... Maybe something for a future update
+    id: "player"
   },
   {
     id: "shulker_bullet"
@@ -451,9 +448,6 @@ const entity_blocklist = [
   },
   {
     id: "xp_orb"
-  },
-  {
-    id: "zombie_horse" // Have you ever found it in survival?
   },
   // Minecraft still has the V1 Villagers in the code, the ones before 1.14, which you will no longer find because they are all replaced by V2 automatically
   {
@@ -568,8 +562,7 @@ const command_categories = [
 ]
 
 const command_list = [
-  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, choice, repeat, command_tail, (gameruletype)
-
+  // types: literal, string, int, float, bool, location, blocktype, itemtype, entityType, entityselector, playerselector, effectType, enchantType, weathertype, json, choice, repeat, command_tail, (gameruletype), enum
   {
     name: "agent",
     aliases: ["agent"],
@@ -578,121 +571,79 @@ const command_list = [
     category: 0,
     syntaxes: [
       { type: "literal", value: "agent" },
-
       {
         type: "choice",
         options: [
-          {
-            name: "create",
-            syntaxes: []
-          },
-          {
-            name: "remove",
-            syntaxes: []
-          },
+          { name: "create", syntaxes: [] },
+          { name: "remove", syntaxes: [] },
           {
             name: "move",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
-                value: [
-                  { value: "forward" },
-                  { value: "back" },
-                  { value: "left" },
-                  { value: "right" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "back", "left", "right", "up", "down"]
               }
             ]
           },
-
           {
             name: "turn",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "turnDirection",
-                value: [
-                  { value: "left" },
-                  { value: "right" }
-                ]
+                value: ["left", "right"]
               }
             ]
           },
-
           {
             name: "attack",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
-                value: [
-                  { value: "forward" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "up", "down"]
               }
             ]
           },
-
           {
             name: "destroy",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
-                value: [
-                  { value: "forward" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "up", "down"]
               }
             ]
           },
-
           {
             name: "place",
             syntaxes: [
               { type: "int", name: "slotNum" },
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
-                value: [
-                  { value: "forward" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "up", "down"]
               }
             ]
           },
-
           {
             name: "collect",
-            syntaxes: [
-              { type: "itemtype", name: "item" }
-            ]
+            syntaxes: [{ type: "itemtype", name: "item" }]
           },
-
           {
             name: "drop",
             syntaxes: [
               { type: "int", name: "slotNum" },
               { type: "int", name: "quantity", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
                 optional: true,
-                value: [
-                  { value: "forward" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "up", "down"]
               }
             ]
           },
-
           {
             name: "transfer",
             syntaxes: [
@@ -701,38 +652,27 @@ const command_list = [
               { type: "int", name: "dstSlotNum" }
             ]
           },
-
           {
             name: "inspect",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "direction",
-                value: [
-                  { value: "forward" },
-                  { value: "up" },
-                  { value: "down" }
-                ]
+                value: ["forward", "up", "down"]
               }
             ]
           },
-
-          {
-            name: "getposition",
-            syntaxes: []
-          },
-
+          { name: "getposition", syntaxes: [] },
           {
             name: "tp",
-            syntaxes: [
-              { type: "location", name: "coordinates" }
-            ]
+            syntaxes: [{ type: "location", name: "coordinates" }]
           }
         ]
       }
     ]
   },
 
+  // --- Fill ---
   {
     name: "fill",
     aliases: ["fill"],
@@ -746,23 +686,14 @@ const command_list = [
       { type: "blocktype", name: "block" },
       { type: "int", name: "data", optional: true },
       {
-        type: "choice",
-        options: [
-          { name: "destroy", syntaxes: [] },
-          { name: "hollow", syntaxes: [] },
-          { name: "keep", syntaxes: [] },
-          { name: "outline", syntaxes: [] },
-          {
-            name: "replace",
-            syntaxes: [
-              { type: "blocktype", name: "oldBlock", optional: true }
-            ]
-          }
-        ]
+        type: "enum",
+        name: "mode",
+        value: ["destroy", "hollow", "keep", "outline", "replace"]
       }
     ]
   },
 
+  // --- Effect ---
   {
     name: "effect",
     aliases: ["effect"],
@@ -785,6 +716,7 @@ const command_list = [
     ]
   },
 
+  // --- Give ---
   {
     name: "give",
     recommended: (player) => getStackCount(player) < 5,
@@ -802,6 +734,7 @@ const command_list = [
     ]
   },
 
+  // --- Summon ---
   {
     name: "summon",
     aliases: ["summon"],
@@ -816,6 +749,7 @@ const command_list = [
     ]
   },
 
+  // --- Teleport ---
   {
     name: "teleport",
     recommended: (player) => isFarthestPlayerFarAway(player, 300),
@@ -875,6 +809,8 @@ const command_list = [
       }
     ]
   },
+
+  // --- Camera ---
   {
     name: "camera",
     aliases: ["camera"],
@@ -887,27 +823,12 @@ const command_list = [
       {
         type: "choice",
         options: [
-          // attach_to_entity
           {
             name: "attach_to_entity",
-            syntaxes: [
-              { type: "entityselector", name: "target" },
-            ]
+            syntaxes: [{ type: "entityselector", name: "target" }]
           },
-
-          // Clear
-          {
-            name: "clear",
-            syntaxes: []
-          },
-
-          // detach_from_entity
-          {
-            name: "detach_from_entity",
-            syntaxes: []
-          },
-
-          // Fade
+          { name: "clear", syntaxes: [] },
+          { name: "detach_from_entity", syntaxes: [] },
           {
             name: "fade",
             optional: true,
@@ -916,21 +837,19 @@ const command_list = [
                 type: "choice",
                 options: [
                   {
-                    value: "time",
-                    next: [
+                    name: "time",
+                    syntaxes: [
                       { type: "float", name: "fadeInSeconds" },
                       { type: "float", name: "holdSeconds" },
                       { type: "float", name: "fadeOutSeconds" },
-
-                      { type: "int", name: "red", optional: true},
+                      { type: "int", name: "red", optional: true },
                       { type: "int", name: "green" },
                       { type: "int", name: "blue" }
-
                     ]
                   },
                   {
-                    value: "color",
-                    next: [
+                    name: "color",
+                    syntaxes: [
                       { type: "int", name: "red" },
                       { type: "int", name: "green" },
                       { type: "int", name: "blue" }
@@ -940,115 +859,76 @@ const command_list = [
               }
             ]
           },
-          // remove_target
-          {
-            name: "remove_target",
-            syntaxes: []
-          },
-
-          // Set
+          { name: "remove_target", syntaxes: [] },
           {
             name: "set",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "preset",
                 value: [
-                  { value: "minecraft:first_person" },
-                  { value: "minecraft:fixed_boom" },
-                  { value: "minecraft:follow_orbit" },
-                  { value: "minecraft:free" },
-                  { value: "minecraft:third_person" },
-                  { value: "minecraft:third_person_front" },
+                  "minecraft:first_person",
+                  "minecraft:fixed_boom",
+                  "minecraft:follow_orbit",
+                  "minecraft:free",
+                  "minecraft:third_person",
+                  "minecraft:third_person_front"
                 ]
               },
               {
-                type: "literal",
-                value: "ease",
+                name: "ease",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "easeTime" },
                   {
-                    type: "choice",
+                    type: "enum",
                     name: "easing",
                     optional: true,
                     value: [
-                      { value: "linear" },
-                      { value: "spring" },
-                      { value: "in_quad" },
-                      { value: "out_quad" },
-                      { value: "in_out_quad" },
-                      { value: "in_cubic" },
-                      { value: "out_cubic" },
-                      { value: "in_out_cubic" },
-                      { value: "in_quart" },
-                      { value: "out_quart" },
-                      { value: "in_out_quart" },
-                      { value: "in_quint" },
-                      { value: "out_quint" },
-                      { value: "in_out_quint" },
-                      { value: "in_sine" },
-                      { value: "out_sine" },
-                      { value: "in_out_sine" },
-                      { value: "in_expo" },
-                      { value: "out_expo" },
-                      { value: "in_out_expo" },
-                      { value: "in_circ" },
-                      { value: "out_circ" },
-                      { value: "in_out_circ" },
-                      { value: "in_bounce" },
-                      { value: "out_bounce" },
-                      { value: "in_out_bounce" },
-                      { value: "in_back" },
-                      { value: "out_back" },
-                      { value: "in_out_back" },
-                      { value: "in_elastic" },
-                      { value: "out_elastic" },
-                      { value: "in_out_elastic" }
+                      "linear", "spring", "in_quad", "out_quad", "in_out_quad",
+                      "in_cubic", "out_cubic", "in_out_cubic", "in_quart", "out_quart",
+                      "in_out_quart", "in_quint", "out_quint", "in_out_quint", "in_sine",
+                      "out_sine", "in_out_sine", "in_expo", "out_expo", "in_out_expo",
+                      "in_circ", "out_circ", "in_out_circ", "in_bounce", "out_bounce",
+                      "in_out_bounce", "in_back", "out_back", "in_out_back", "in_elastic",
+                      "out_elastic", "in_out_elastic"
                     ]
                   }
                 ]
               },
               {
-                type: "literal",
-                value: "pos",
+                name: "pos",
                 optional: true,
-                next: [
-                  { type: "location", name: "position" }
-                ]
+                syntaxes: [{ type: "location", name: "position" }]
               },
               {
-                type: "literal",
-                value: "rot",
+                name: "rot",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "xRot" },
                   { type: "float", name: "yRot" }
                 ]
               },
               {
-                type: "literal",
-                value: "facing",
+                name: "facing",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "entityselector", name: "lookAtEntity", optional: true },
                   { type: "location", name: "lookAtPosition", optional: true }
                 ]
               },
               {
-                type: "literal",
-                value: "view_offset",
+                name: "view_offset",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "xViewOffset" },
                   { type: "float", name: "yViewOffset" }
                 ]
               },
               {
-                type: "literal",
-                value: "entity_offset",
+                name: "entity_offset",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "xEntityOffset" },
                   { type: "float", name: "yEntityOffset" },
                   { type: "float", name: "zEntityOffset" }
@@ -1056,17 +936,14 @@ const command_list = [
               }
             ]
           },
-
-          // target_entity
           {
             name: "target_entity",
             syntaxes: [
               { type: "entityselector", name: "entity" },
               {
-                type: "literal",
-                value: "target_center_offset",
+                name: "target_center_offset",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "xTargetCenterOffset" },
                   { type: "float", name: "yTargetCenterOffset" },
                   { type: "float", name: "zTargetCenterOffset" }
@@ -1074,101 +951,43 @@ const command_list = [
               }
             ]
           },
-
-
-
-
-
-          // Set FOV
           {
             name: "fov_set",
             syntaxes: [
               { type: "float", name: "fov_value" },
               { type: "float", name: "fovEaseTime", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "fovEaseType",
                 optional: true,
                 value: [
-                  { value: "linear" },
-                  { value: "spring" },
-                  { value: "in_quad" },
-                  { value: "out_quad" },
-                  { value: "in_out_quad" },
-                  { value: "in_cubic" },
-                  { value: "out_cubic" },
-                  { value: "in_out_cubic" },
-                  { value: "in_quart" },
-                  { value: "out_quart" },
-                  { value: "in_out_quart" },
-                  { value: "in_quint" },
-                  { value: "out_quint" },
-                  { value: "in_out_quint" },
-                  { value: "in_sine" },
-                  { value: "out_sine" },
-                  { value: "in_out_sine" },
-                  { value: "in_expo" },
-                  { value: "out_expo" },
-                  { value: "in_out_expo" },
-                  { value: "in_circ" },
-                  { value: "out_circ" },
-                  { value: "in_out_circ" },
-                  { value: "in_bounce" },
-                  { value: "out_bounce" },
-                  { value: "in_out_bounce" },
-                  { value: "in_back" },
-                  { value: "out_back" },
-                  { value: "in_out_back" },
-                  { value: "in_elastic" },
-                  { value: "out_elastic" },
-                  { value: "in_out_elastic" }
+                  "linear", "spring", "in_quad", "out_quad", "in_out_quad",
+                  "in_cubic", "out_cubic", "in_out_cubic", "in_quart", "out_quart",
+                  "in_out_quart", "in_quint", "out_quint", "in_out_quint", "in_sine",
+                  "out_sine", "in_out_sine", "in_expo", "out_expo", "in_out_expo",
+                  "in_circ", "out_circ", "in_out_circ", "in_bounce", "out_bounce",
+                  "in_out_bounce", "in_back", "out_back", "in_out_back", "in_elastic",
+                  "out_elastic", "in_out_elastic"
                 ]
               }
             ]
           },
-
-          //  Clear FOV
           {
             name: "fov_clear",
             syntaxes: [
               { type: "float", name: "fovEaseTime", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "fovEaseType",
                 optional: true,
                 value: [
-                  { value: "linear" },
-                  { value: "spring" },
-                  { value: "in_quad" },
-                  { value: "out_quad" },
-                  { value: "in_out_quad" },
-                  { value: "in_cubic" },
-                  { value: "out_cubic" },
-                  { value: "in_out_cubic" },
-                  { value: "in_quart" },
-                  { value: "out_quart" },
-                  { value: "in_out_quart" },
-                  { value: "in_quint" },
-                  { value: "out_quint" },
-                  { value: "in_out_quint" },
-                  { value: "in_sine" },
-                  { value: "out_sine" },
-                  { value: "in_out_sine" },
-                  { value: "in_expo" },
-                  { value: "out_expo" },
-                  { value: "in_out_expo" },
-                  { value: "in_circ" },
-                  { value: "out_circ" },
-                  { value: "in_out_circ" },
-                  { value: "in_bounce" },
-                  { value: "out_bounce" },
-                  { value: "in_out_bounce" },
-                  { value: "in_back" },
-                  { value: "out_back" },
-                  { value: "in_out_back" },
-                  { value: "in_elastic" },
-                  { value: "out_elastic" },
-                  { value: "in_out_elastic" }
+                  "linear", "spring", "in_quad", "out_quad", "in_out_quad",
+                  "in_cubic", "out_cubic", "in_out_cubic", "in_quart", "out_quart",
+                  "in_out_quart", "in_quint", "out_quint", "in_out_quint", "in_sine",
+                  "out_sine", "in_out_sine", "in_expo", "out_expo", "in_out_expo",
+                  "in_circ", "out_circ", "in_out_circ", "in_bounce", "out_bounce",
+                  "in_out_bounce", "in_back", "out_back", "in_out_back", "in_elastic",
+                  "out_elastic", "in_out_elastic"
                 ]
               }
             ]
@@ -1178,6 +997,7 @@ const command_list = [
     ]
   },
 
+  // --- Playsound ---
   {
     name: "playsound",
     aliases: ["playsound"],
@@ -1195,6 +1015,7 @@ const command_list = [
     ]
   },
 
+  // --- Setblock ---
   {
     name: "setblock",
     aliases: ["setblock"],
@@ -1206,28 +1027,30 @@ const command_list = [
       { type: "blocktype", name: "block" },
       { type: "int", name: "data", optional: true },
       {
-        type: "choice",
+        type: "enum",
         name: "mode",
         optional: true,
-        value: [{ value: "destroy" }, { value: "keep" }, { value: "replace" }]
+        value: ["destroy", "keep", "replace"]
       }
     ]
   },
 
+  // --- Weather ---
   {
     name: "weather",
     aliases: ["weather"],
     textures: "textures/ui/cloud_only_storage",
-    recommended: (player) => false, //world.getDimension("overworld").getWeather() !== WeatherType.Clear,
+    recommended: (player) => false,
     description: "Set or query the weather",
     category: 1,
     syntaxes: [
       { type: "literal", value: "weather" },
-      { type: "weatherType", name: "type"},
+      { type: "weathertype", name: "type" },
       { type: "int", name: "duration", optional: true }
     ]
   },
 
+  // --- Help ---
   {
     name: "help",
     aliases: ["help", "?"],
@@ -1241,6 +1064,7 @@ const command_list = [
     ]
   },
 
+  // --- Daylock ---
   {
     name: "daylock",
     aliases: ["daylock", "alwaysday"],
@@ -1249,10 +1073,11 @@ const command_list = [
     category: 1,
     syntaxes: [
       { type: "literal", value: "daylock" },
-      { type: "bool", name: "enabled"}
+      { type: "bool", name: "enabled" }
     ]
   },
 
+  // --- Clear ---
   {
     name: "clear",
     recommended: (player) => getStackCount(player) > 10,
@@ -1268,6 +1093,7 @@ const command_list = [
     ]
   },
 
+  // --- Clearspawnpoint ---
   {
     name: "clearspawnpoint",
     textures: "textures/ui/icon_trash",
@@ -1280,6 +1106,7 @@ const command_list = [
     ]
   },
 
+  // --- Clone ---
   {
     name: "clone",
     aliases: ["clone"],
@@ -1292,19 +1119,16 @@ const command_list = [
       { type: "location", name: "end" },
       { type: "location", name: "destination" },
       {
-        type: "choice",
+        type: "enum",
         name: "mode",
         optional: true,
-        value: [
-          { value: "replace" },
-          { value: "masked" },
-          { value: "filtered" }
-        ]
+        value: ["replace", "masked", "filtered"]
       },
       { type: "string", name: "filterBlock", optional: true }
     ]
   },
 
+  // --- Damage ---
   {
     name: "damage",
     aliases: ["damage"],
@@ -1316,10 +1140,11 @@ const command_list = [
       { type: "entityselector", name: "target" },
       { type: "int", name: "amount" },
       { type: "string", name: "damagetype", optional: true },
-      { type: "entityselector", name: "source of the damage", optional: true },
+      { type: "entityselector", name: "source of the damage", optional: true }
     ]
   },
 
+  // --- Dialogue ---
   {
     name: "dialogue",
     aliases: ["dialogue"],
@@ -1333,6 +1158,7 @@ const command_list = [
     ]
   },
 
+  // --- Difficulty ---
   {
     name: "difficulty",
     aliases: ["difficulty"],
@@ -1342,13 +1168,14 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "difficulty" },
       {
-        type: "choice",
+        type: "enum",
         name: "level",
-        value: [{ value: "peaceful" }, { value: "easy" }, { value: "normal" }, { value: "hard" }]
+        value: ["peaceful", "easy", "normal", "hard"]
       }
     ]
   },
 
+  // --- Enchant ---
   {
     name: "enchant",
     aliases: ["enchant"],
@@ -1357,13 +1184,10 @@ const command_list = [
     vc_available: (player) => true,
     visible: (player) => getCompatibleEnchantmentTypes(player.getComponent("minecraft:inventory")?.container?.getItem(player.selectedSlotIndex)).length > 0,
     recommended: (player) => {
-      const firstWithEnchantable = world
-        .getAllPlayers()
-        .find(p => {
-          const item = p.getComponent("minecraft:inventory")?.container?.getItem(p.selectedSlotIndex);
-          return !!item && getCompatibleEnchantmentTypes(item).length > 0;
-        });
-
+      const firstWithEnchantable = world.getAllPlayers().find(p => {
+        const item = p.getComponent("minecraft:inventory")?.container?.getItem(p.selectedSlotIndex);
+        return !!item && getCompatibleEnchantmentTypes(item).length > 0;
+      });
       return !!firstWithEnchantable && firstWithEnchantable.name === player.name;
     },
     description: "Apply an enchantment to an item",
@@ -1376,6 +1200,7 @@ const command_list = [
     ]
   },
 
+  // --- Event ---
   {
     name: "event",
     textures: "textures/ui/raid_omen_effect",
@@ -1385,10 +1210,11 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "event" },
       { type: "entityselector", name: "targetEntity" },
-      { type: "string", name: "eventName" },
+      { type: "string", name: "eventName" }
     ]
   },
 
+  // --- Execute ---
   {
     name: "execute",
     aliases: ["execute"],
@@ -1440,14 +1266,39 @@ const command_list = [
                     type: "choice",
                     name: "facing_mode",
                     options: [
-                      { name: "entity", syntaxes: [{ type: "entityselector", name: "targets" }, { type: "choice", name: "anchor", options: [{ name: "eyes", syntaxes: [] }, { name: "feet", syntaxes: [] }] }] },
+                      {
+                        name: "entity",
+                        syntaxes: [
+                          { type: "entityselector", name: "targets" },
+                          {
+                            type: "choice",
+                            name: "anchor",
+                            options: [
+                              { name: "eyes", syntaxes: [] },
+                              { name: "feet", syntaxes: [] }
+                            ]
+                          }
+                        ]
+                      },
                       { name: "position", syntaxes: [{ type: "location", name: "position" }] }
                     ]
                   }
                 ]
               },
               { name: "align", syntaxes: [{ type: "string", name: "axes" }] },
-              { name: "anchored", syntaxes: [{ type: "choice", name: "anchor", options: [{ name: "eyes", syntaxes: [] }, { name: "feet", syntaxes: [] }] }] },
+              {
+                name: "anchored",
+                syntaxes: [
+                  {
+                    type: "choice",
+                    name: "anchor",
+                    options: [
+                      { name: "eyes", syntaxes: [] },
+                      { name: "feet", syntaxes: [] }
+                    ]
+                  }
+                ]
+              },
               {
                 name: "if",
                 syntaxes: [
@@ -1455,10 +1306,59 @@ const command_list = [
                     type: "choice",
                     name: "if_mode",
                     options: [
-                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }, { type: "can_exit_loop" }] },
-                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }, { type: "can_exit_loop" }] },
-                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }, { type: "can_exit_loop" }] },
-                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }, { type:"can_exit_loop" }] }
+                      {
+                        name: "block",
+                        syntaxes: [
+                          { type: "location", name: "position" },
+                          { type: "blocktype", name: "block" },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "blocks",
+                        syntaxes: [
+                          { type: "location", name: "start" },
+                          { type: "location", name: "end" },
+                          { type: "location", name: "destination" },
+                          {
+                            type: "choice",
+                            name: "scanMode",
+                            options: [
+                              { name: "all", syntaxes: [] },
+                              { name: "masked", syntaxes: [] }
+                            ]
+                          },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "entity",
+                        syntaxes: [
+                          { type: "entityselector", name: "target" },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "score",
+                        syntaxes: [
+                          { type: "string", name: "target" },
+                          { type: "string", name: "targetObjective" },
+                          {
+                            type: "choice",
+                            name: "operator",
+                            options: [
+                              { name: "<", syntaxes: [] },
+                              { name: "<=", syntaxes: [] },
+                              { name: "=", syntaxes: [] },
+                              { name: ">=", syntaxes: [] },
+                              { name: ">", syntaxes: [] }
+                            ]
+                          },
+                          { type: "string", name: "source" },
+                          { type: "string", name: "sourceObjective" },
+                          { type: "can_exit_loop" }
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -1470,10 +1370,59 @@ const command_list = [
                     type: "choice",
                     name: "unless_mode",
                     options: [
-                      { name: "block", syntaxes: [{ type: "location", name: "position" }, { type: "blocktype", name: "block" }, { type: "can_exit_loop" }] },
-                      { name: "blocks", syntaxes: [{ type: "location", name: "start" }, { type: "location", name: "end" }, { type: "location", name: "destination" }, { type: "choice", name: "scanMode", options: [{ name: "all", syntaxes: [] }, { name: "masked", syntaxes: [] }] }, { type: "can_exit_loop" }] },
-                      { name: "entity", syntaxes: [{ type: "entityselector", name: "target" }, { type: "can_exit_loop" }] },
-                      { name: "score", syntaxes: [{ type: "string", name: "target" }, { type: "string", name: "targetObjective" }, { type: "choice", name: "operator", options: [{ name: "<", syntaxes: [] }, { name: "<=", syntaxes: [] }, { name: "=", syntaxes: [] }, { name: ">=", syntaxes: [] }, { name: ">", syntaxes: [] }] }, { type: "string", name: "source" }, { type: "string", name: "sourceObjective" }, { type: "can_exit_loop" }] }
+                      {
+                        name: "block",
+                        syntaxes: [
+                          { type: "location", name: "position" },
+                          { type: "blocktype", name: "block" },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "blocks",
+                        syntaxes: [
+                          { type: "location", name: "start" },
+                          { type: "location", name: "end" },
+                          { type: "location", name: "destination" },
+                          {
+                            type: "choice",
+                            name: "scanMode",
+                            options: [
+                              { name: "all", syntaxes: [] },
+                              { name: "masked", syntaxes: [] }
+                            ]
+                          },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "entity",
+                        syntaxes: [
+                          { type: "entityselector", name: "target" },
+                          { type: "can_exit_loop" }
+                        ]
+                      },
+                      {
+                        name: "score",
+                        syntaxes: [
+                          { type: "string", name: "target" },
+                          { type: "string", name: "targetObjective" },
+                          {
+                            type: "choice",
+                            name: "operator",
+                            options: [
+                              { name: "<", syntaxes: [] },
+                              { name: "<=", syntaxes: [] },
+                              { name: "=", syntaxes: [] },
+                              { name: ">=", syntaxes: [] },
+                              { name: ">", syntaxes: [] }
+                            ]
+                          },
+                          { type: "string", name: "source" },
+                          { type: "string", name: "sourceObjective" },
+                          { type: "can_exit_loop" }
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -1492,6 +1441,7 @@ const command_list = [
     ]
   },
 
+  // --- XP ---
   {
     name: "xp",
     aliases: ["xp", "experience"],
@@ -1505,6 +1455,7 @@ const command_list = [
     ]
   },
 
+  // --- Fog ---
   {
     name: "fog",
     aliases: ["fog"],
@@ -1513,92 +1464,60 @@ const command_list = [
     category: 1,
     syntaxes: [
       { type: "literal", value: "fog" },
-
-      // optional: Ziel-Spieler/Targets
       { type: "playerselector", name: "targets", optional: true },
-
       {
         type: "choice",
         options: [
-          // Setze Fog-Parameter direkt
           {
             name: "set",
             syntaxes: [
-              // Dichte (0.0 - 1.0 typisch)
               { type: "float", name: "density", optional: true },
-
-              // Farbe als RGB
               {
-                type: "literal",
-                value: "color",
+                name: "color",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "int", name: "red" },
                   { type: "int", name: "green" },
                   { type: "int", name: "blue" }
                 ]
               },
-
-              // Distanzbereich (start, optional end)
               {
-                type: "literal",
-                value: "distance",
+                name: "distance",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "startDistance" },
                   { type: "float", name: "endDistance", optional: true }
                 ]
               },
-
-              // Übergang (Zeit + optionaler Easing-Typ)
               {
-                type: "literal",
-                value: "transition",
+                name: "transition",
                 optional: true,
-                next: [
+                syntaxes: [
                   { type: "float", name: "timeSeconds" },
                   {
-                    type: "choice",
+                    type: "enum",
                     name: "easing",
                     optional: true,
                     value: [
-                      { value: "linear" },
-                      { value: "spring" },
-                      { value: "in_quad" },
-                      { value: "out_quad" },
-                      { value: "in_out_quad" },
-                      { value: "in_cubic" },
-                      { value: "out_cubic" },
-                      { value: "in_out_cubic" }
+                      "linear", "spring", "in_quad", "out_quad", "in_out_quad",
+                      "in_cubic", "out_cubic", "in_out_cubic"
                     ]
                   }
                 ]
               }
             ]
           },
-
-          // Setze eine vordefinierte Preset-Konfiguration
           {
             name: "preset",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "presetName",
-                value: [
-                  { value: "default" },
-                  { value: "dense" },
-                  { value: "light" },
-                  { value: "haze" },
-                  { value: "underwater" }
-                ]
+                value: ["default", "dense", "light", "haze", "underwater"]
               },
-
-              // optional: Übergangszeit beim Wechsel des Presets
               { type: "float", name: "transitionTime", optional: true }
             ]
           },
-
-          // Einfache Farbänderung
           {
             name: "color",
             syntaxes: [
@@ -1607,8 +1526,6 @@ const command_list = [
               { type: "int", name: "blue" }
             ]
           },
-
-          // Blend-Funktion: mischt von einer Farbe/Dichte zur anderen
           {
             name: "blend",
             syntaxes: [
@@ -1623,31 +1540,18 @@ const command_list = [
               { type: "int", name: "toBlue" }
             ]
           },
-
-          // Entferne/kläre alle Fog-Overrides
-          {
-            name: "clear",
-            syntaxes: []
-          },
-
-          // Setze Fog so, dass es dem aktuellen Wetter folgt (wenn relevant)
-          {
-            name: "follow_weather",
-            syntaxes: []
-          },
-
-          // Schalte Fog ein/aus (Kurzform)
+          { name: "clear", syntaxes: [] },
+          { name: "follow_weather", syntaxes: [] },
           {
             name: "toggle",
-            syntaxes: [
-              { type: "bool", name: "enabled", optional: true }
-            ]
+            syntaxes: [{ type: "bool", name: "enabled", optional: true }]
           }
         ]
       }
     ]
   },
 
+  // --- Function ---
   {
     name: "function",
     aliases: ["function"],
@@ -1660,6 +1564,7 @@ const command_list = [
     ]
   },
 
+  // --- Gamemode ---
   {
     name: "gamemode",
     aliases: ["gamemode", "gm"],
@@ -1676,13 +1581,15 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "gamemode" },
       {
-        type: "choice",
+        type: "enum",
         name: "mode",
-        value: [{ value: "survival" }, { value: "creative" }, { value: "adventure" }, { value: "default" }, { value: "spectator" }, { value: "s" }, { value: "a" }, { value: "d" }, { value: "c" }]
+        value: ["survival", "creative", "adventure", "default", "spectator", "s", "a", "d", "c"]
       },
       { type: "playerselector", name: "target", optional: true }
     ]
   },
+
+  // --- Gamerule ---
   {
     name: "gamerule",
     aliases: ["gamerule"],
@@ -1700,7 +1607,7 @@ const command_list = [
     ]
   },
 
-
+  // --- HUD ---
   {
     name: "hud",
     aliases: ["hud"],
@@ -1711,37 +1618,24 @@ const command_list = [
       { type: "literal", value: "hud" },
       { type: "playerselector", name: "target" },
       {
-        type: "choice",
+        type: "enum",
         name: "visible",
-        value: [
-          { value: "hide" },
-          { value: "reset" }
-        ]
+        value: ["hide", "reset"]
       },
       {
-        type: "choice",
+        type: "enum",
         name: "hud_element",
         optional: true,
         value: [
-          { value: "hunger" },
-          { value: "all" },
-          { value: "paperdoll" },
-          { value: "armor" },
-          { value: "tooltips" },
-          { value: "touch_controls" },
-          { value: "crosshair" },
-          { value: "hotbar" },
-          { value: "health" },
-          { value: "progress_bar" },
-          { value: "air_bubbles" },
-          { value: "horse_health" },
-          { value: "status_effects" },
-          { value: "item_text" }
+          "hunger", "all", "paperdoll", "armor", "tooltips", "touch_controls",
+          "crosshair", "hotbar", "health", "progress_bar", "air_bubbles",
+          "horse_health", "status_effects", "item_text"
         ]
       }
     ]
   },
 
+  // --- Inputpermission ---
   {
     name: "inputpermission",
     aliases: ["inputpermission"],
@@ -1752,50 +1646,36 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "inputpermission" },
       {
-        type: "choice",
+        type: "enum",
         name: "subcommand",
-        value: [
-          { value: "set" },
-          { value: "reset" },
-          { value: "query" }
-        ]
+        value: ["set", "reset", "query"]
       },
       { type: "playerselector", name: "player" },
       {
-        type: "choice",
+        type: "enum",
         name: "permission",
         optional: true,
         value: [
-          { value: "camera" },
-          { value: "movement" },
-          { value: "jump" },
-          { value: "lateral_movement" },
-          { value: "sneak" },
-          { value: "dismount" },
-          { value: "mount" },
-          { value: "move_backward" },
-          { value: "move_forward" },
-          { value: "move_left" },
-          { value: "move_right" },
-          { value: "use_item" },
-          { value: "all" }
+          "camera", "movement", "jump", "lateral_movement", "sneak",
+          "dismount", "mount", "move_backward", "move_forward", "move_left",
+          "move_right", "use_item", "all"
         ]
       },
       { type: "bool", name: "value", optional: true }
     ]
   },
 
+  // --- Seed ---
   {
     name: "seed",
     category: 1,
     aliases: ["seed"],
     textures: "textures/ui/worldsIcon",
     description: "Gives the world seed",
-    syntaxes: [
-      { type: "literal", value: "seed" }
-    ]
+    syntaxes: [{ type: "literal", value: "seed" }]
   },
 
+  // --- Kill ---
   {
     name: "kill",
     aliases: ["kill"],
@@ -1808,6 +1688,7 @@ const command_list = [
     ]
   },
 
+  // --- Music ---
   {
     name: "music",
     aliases: ["music"],
@@ -1816,7 +1697,6 @@ const command_list = [
     category: 4,
     syntaxes: [
       { type: "literal", value: "music" },
-
       {
         type: "choice",
         options: [
@@ -1827,17 +1707,13 @@ const command_list = [
               { type: "float", name: "volume", optional: true },
               { type: "float", name: "fadeSeconds", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "repeatMode",
                 optional: true,
-                value: [
-                  { value: "play_once" },
-                  { value: "loop" }
-                ]
+                value: ["play_once", "loop"]
               }
             ]
           },
-
           {
             name: "queue",
             syntaxes: [
@@ -1845,35 +1721,27 @@ const command_list = [
               { type: "float", name: "volume", optional: true },
               { type: "float", name: "fadeSeconds", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "repeatMode",
                 optional: true,
-                value: [
-                  { value: "play_once" },
-                  { value: "loop" }
-                ]
+                value: ["play_once", "loop"]
               }
             ]
           },
-
           {
             name: "stop",
-            syntaxes: [
-              { type: "float", name: "fadeSeconds", optional: true }
-            ]
+            syntaxes: [{ type: "float", name: "fadeSeconds", optional: true }]
           },
-
           {
             name: "volume",
-            syntaxes: [
-              { type: "float", name: "volume" }
-            ]
+            syntaxes: [{ type: "float", name: "volume" }]
           }
         ]
       }
     ]
   },
 
+  // --- Particle ---
   {
     name: "particle",
     aliases: ["particle"],
@@ -1888,6 +1756,7 @@ const command_list = [
     ]
   },
 
+  // --- Playanimation ---
   {
     name: "playanimation",
     aliases: ["playanimation"],
@@ -1901,6 +1770,7 @@ const command_list = [
     ]
   },
 
+  // --- Recipe ---
   {
     name: "recipe",
     aliases: ["recipe"],
@@ -1941,20 +1811,14 @@ const command_list = [
               { type: "string", name: "recipeNamespace", optional: true }
             ]
           },
-          {
-            name: "all",
-            syntaxes: []
-          },
-          {
-            name: "none",
-            syntaxes: []
-          }
+          { name: "all", syntaxes: [] },
+          { name: "none", syntaxes: [] }
         ]
       }
     ]
   },
 
-
+  // --- Replaceitem ---
   {
     name: "replaceitem",
     aliases: ["replaceitem"],
@@ -1993,7 +1857,7 @@ const command_list = [
     ]
   },
 
-
+  // --- Ride ---
   {
     name: "ride",
     aliases: ["ride"],
@@ -2004,7 +1868,6 @@ const command_list = [
     syntaxes: [
       { type: "literal", value: "ride" },
       { type: "entityselector", name: "rider" },
-
       {
         type: "choice",
         options: [
@@ -2013,40 +1876,24 @@ const command_list = [
             syntaxes: [
               { type: "entityselector", name: "ridee" },
               {
-                type: "choice",
+                type: "enum",
                 name: "teleportRules",
                 optional: true,
-                value: [
-                  { value: "teleport_rider" },
-                  { value: "teleport_ridee" },
-                  { value: "never" }
-                ]
+                value: ["teleport_rider", "teleport_ridee", "never"]
               },
               {
-                type: "choice",
+                type: "enum",
                 name: "rideRules",
                 optional: true,
-                value: [
-                  { value: "no_ride_change" },
-                  { value: "allow_stacking" },
-                  { value: "replace_rides" }
-                ]
+                value: ["no_ride_change", "allow_stacking", "replace_rides"]
               }
             ]
           },
-
-          {
-            name: "stop_riding",
-            syntaxes: []
-          },
-
+          { name: "stop_riding", syntaxes: [] },
           {
             name: "evict_riders",
-            syntaxes: [
-              { type: "entityselector", name: "ridee" }
-            ]
+            syntaxes: [{ type: "entityselector", name: "ridee" }]
           },
-
           {
             name: "summon_rider",
             syntaxes: [
@@ -2060,7 +1907,7 @@ const command_list = [
     ]
   },
 
-
+  // --- Schedule ---
   {
     name: "schedule",
     aliases: ["schedule"],
@@ -2069,7 +1916,6 @@ const command_list = [
     category: 4,
     syntaxes: [
       { type: "literal", value: "schedule" },
-
       {
         type: "choice",
         options: [
@@ -2108,7 +1954,7 @@ const command_list = [
     ]
   },
 
-
+  // --- Scoreboard ---
   {
     name: "scoreboard",
     aliases: ["scoreboard"],
@@ -2136,21 +1982,15 @@ const command_list = [
                   },
                   {
                     name: "remove",
-                    syntaxes: [
-                      { type: "string", name: "objective" }
-                    ]
+                    syntaxes: [{ type: "string", name: "objective" }]
                   },
                   {
                     name: "setdisplay",
                     syntaxes: [
                       {
-                        type: "choice",
+                        type: "enum",
                         name: "slot",
-                        value: [
-                          { value: "list" },
-                          { value: "sidebar" },
-                          { value: "belowName" }
-                        ]
+                        value: ["list", "sidebar", "belowName"]
                       },
                       { type: "string", name: "objective", optional: true }
                     ]
@@ -2198,9 +2038,7 @@ const command_list = [
                   },
                   {
                     name: "list",
-                    syntaxes: [
-                      { type: "playerselector", name: "player", optional: true }
-                    ]
+                    syntaxes: [{ type: "playerselector", name: "player", optional: true }]
                   }
                 ]
               }
@@ -2211,7 +2049,7 @@ const command_list = [
     ]
   },
 
-
+  // --- Setworldspawn ---
   {
     name: "setworldspawn",
     aliases: ["setworldspawn"],
@@ -2224,6 +2062,7 @@ const command_list = [
     ]
   },
 
+  // --- Spawnpoint ---
   {
     name: "spawnpoint",
     aliases: ["spawnpoint"],
@@ -2237,6 +2076,7 @@ const command_list = [
     ]
   },
 
+  // --- Spreadplayers ---
   {
     name: "spreadplayers",
     aliases: ["spreadplayers"],
@@ -2252,6 +2092,7 @@ const command_list = [
     ]
   },
 
+  // --- Stopsound ---
   {
     name: "stopsound",
     aliases: ["stopsound"],
@@ -2264,6 +2105,7 @@ const command_list = [
     ]
   },
 
+  // --- Structure ---
   {
     name: "structure",
     aliases: ["structure"],
@@ -2272,7 +2114,6 @@ const command_list = [
     category: 1,
     syntaxes: [
       { type: "literal", value: "structure" },
-
       {
         type: "choice",
         options: [
@@ -2282,96 +2123,50 @@ const command_list = [
               { type: "string", name: "structureName" },
               { type: "location", name: "pos1" },
               { type: "location", name: "pos2" },
+              { type: "bool", name: "includeEntities", optional: true },
               {
-                type: "bool",
-                name: "includeEntities",
-                optional: true
-              },
-              {
-                type: "choice",
+                type: "enum",
                 name: "saveMode",
                 optional: true,
-                value: [
-                  { value: "disk" },
-                  { value: "memory" }
-                ]
+                value: ["disk", "memory"]
               },
-              {
-                type: "bool",
-                name: "includeBlocks",
-                optional: true
-              },
+              { type: "bool", name: "includeBlocks", optional: true }
             ]
           },
-
           {
             name: "load",
             syntaxes: [
               { type: "string", name: "structureName" },
               { type: "location", name: "destination" },
               {
-                type: "choice",
+                type: "enum",
                 name: "rotation",
                 optional: true,
-                value: [
-                  { value: "0_degrees" },
-                  { value: "90_degrees" },
-                  { value: "180_degrees" },
-                  { value: "270_degrees" }
-                ]
+                value: ["0_degrees", "90_degrees", "180_degrees", "270_degrees"]
               },
               {
-                type: "choice",
+                type: "enum",
                 name: "mirror",
                 optional: true,
-                value: [
-                  { value: "none" },
-                  { value: "x" },
-                  { value: "xz" },
-                  { value: "z" }
-                ]
+                value: ["none", "x", "xz", "z"]
               },
-              // Note: "animation" mode for load is not supported just yet, because it requires related or repeated syntaxs!
-              {
-                type: "bool",
-                name: "includeEntities",
-                optional: true
-              },
-              {
-                type: "bool",
-                name: "includeBlocks",
-                optional: true
-              },
-              {
-                type: "bool",
-                name: "waterlogged",
-                optional: true
-              },
-              {
-                type: "float",
-                name: "integrity",
-                optional: true
-              },
-              {
-                type: "string",
-                name: "seed",
-                optional: true
-              },
+              { type: "bool", name: "includeEntities", optional: true },
+              { type: "bool", name: "includeBlocks", optional: true },
+              { type: "bool", name: "waterlogged", optional: true },
+              { type: "float", name: "integrity", optional: true },
+              { type: "string", name: "seed", optional: true }
             ]
           },
-
           {
             name: "delete",
-            syntaxes: [
-              { type: "string", name: "structureName" }
-            ]
+            syntaxes: [{ type: "string", name: "structureName" }]
           }
         ]
       }
     ]
   },
 
-
+  // --- Tag ---
   {
     name: "tag",
     aliases: ["tag"],
@@ -2380,35 +2175,19 @@ const command_list = [
     category: 2,
     syntaxes: [
       { type: "literal", value: "tag" },
-      {
-        type: "entityselector",
-        name: "target"
-      },
+      { type: "entityselector", name: "target" },
       {
         type: "choice",
         options: [
-          {
-            name: "add",
-            syntaxes: [
-              { type: "string", name: "tag" }
-            ]
-          },
-          {
-            name: "remove",
-            syntaxes: [
-              { type: "string", name: "tag" }
-            ]
-          },
-          {
-            name: "list",
-            syntaxes: []
-          }
+          { name: "add", syntaxes: [{ type: "string", name: "tag" }] },
+          { name: "remove", syntaxes: [{ type: "string", name: "tag" }] },
+          { name: "list", syntaxes: [] }
         ]
       }
     ]
   },
 
-
+  // --- Tellraw ---
   {
     name: "tellraw",
     aliases: ["tellraw"],
@@ -2423,6 +2202,7 @@ const command_list = [
     ]
   },
 
+  // --- Testfor ---
   {
     name: "testfor",
     aliases: ["testfor"],
@@ -2435,6 +2215,7 @@ const command_list = [
     ]
   },
 
+  // --- Testforblock ---
   {
     name: "testforblock",
     aliases: ["testforblock"],
@@ -2448,6 +2229,7 @@ const command_list = [
     ]
   },
 
+  // --- Testforblocks ---
   {
     name: "testforblocks",
     aliases: ["testforblocks"],
@@ -2460,24 +2242,16 @@ const command_list = [
       { type: "location", name: "end" },
       { type: "location", name: "destination" },
       {
-        type: "choice",
+        type: "enum",
         name: "mode",
         optional: true,
-        value: [
-          { value: "all" },
-          { value: "masked" },
-          {
-            value: "filtered",
-            next: [
-              { type: "blocktype", name: "filterBlock", optional: true }
-            ]
-          }
-        ]
-      }
+        value: ["all", "masked"]
+      },
+      { type: "blocktype", name: "filterBlock", optional: true }
     ]
   },
 
-
+  // --- Tickingarea ---
   {
     name: "tickingarea",
     aliases: ["tickingarea"],
@@ -2486,52 +2260,29 @@ const command_list = [
     category: 1,
     syntaxes: [
       { type: "literal", value: "tickingarea" },
-
       {
         type: "choice",
         options: [
           {
             name: "add",
             syntaxes: [
-              {
-                type: "location",
-                name: "pos1"
-              },
-              {
-                type: "location",
-                name: "pos2",
-                optional: true
-              },
-              {
-                type: "string",
-                name: "name",
-                optional: true
-              }
+              { type: "location", name: "pos1" },
+              { type: "location", name: "pos2", optional: true },
+              { type: "string", name: "name", optional: true }
             ]
           },
           {
             name: "remove",
-            syntaxes: [
-              {
-                type: "string",
-                name: "name"
-              }
-            ]
+            syntaxes: [{ type: "string", name: "name" }]
           },
-          {
-            name: "list",
-            syntaxes: []
-          },
-          {
-            name: "remove_all",
-            syntaxes: []
-          }
+          { name: "list", syntaxes: [] },
+          { name: "remove_all", syntaxes: [] }
         ]
       }
     ]
   },
 
-
+  // --- Time ---
   {
     name: "time",
     aliases: ["time"],
@@ -2550,36 +2301,25 @@ const command_list = [
             name: "set",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "timeType",
-                value: [
-                  { value: "day" },
-                  { value: "night" },
-                  { value: "noon" },
-                  { value: "midnight" }
-                ],
-                optional: true
+                optional: true,
+                value: ["day", "night", "noon", "midnight"]
               },
               { type: "int", name: "ticks", optional: true }
             ]
           },
           {
             name: "add",
-            syntaxes: [
-              { type: "int", name: "ticks" }
-            ]
+            syntaxes: [{ type: "int", name: "ticks" }]
           },
           {
             name: "query",
             syntaxes: [
               {
-                type: "choice",
+                type: "enum",
                 name: "queryType",
-                value: [
-                  { value: "daytime" },
-                  { value: "gametime" },
-                  { value: "day" }
-                ]
+                value: ["daytime", "gametime", "day"]
               }
             ]
           }
@@ -2588,7 +2328,7 @@ const command_list = [
     ]
   },
 
-
+  // --- Title ---
   {
     name: "title",
     aliases: ["title"],
@@ -2601,24 +2341,9 @@ const command_list = [
       {
         type: "choice",
         options: [
-          {
-            name: "title",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          },
-          {
-            name: "subtitle",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          },
-          {
-            name: "actionbar",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          },
+          { name: "title", syntaxes: [{ type: "string", name: "text" }] },
+          { name: "subtitle", syntaxes: [{ type: "string", name: "text" }] },
+          { name: "actionbar", syntaxes: [{ type: "string", name: "text" }] },
           {
             name: "times",
             syntaxes: [
@@ -2627,19 +2352,14 @@ const command_list = [
               { type: "int", name: "fadeOut" }
             ]
           },
-          {
-            name: "clear",
-            syntaxes: []
-          },
-          {
-            name: "reset",
-            syntaxes: []
-          }
+          { name: "clear", syntaxes: [] },
+          { name: "reset", syntaxes: [] }
         ]
       }
     ]
   },
 
+  // --- Titleraw ---
   {
     name: "titleraw",
     aliases: ["titleraw"],
@@ -2652,30 +2372,16 @@ const command_list = [
       {
         type: "choice",
         options: [
-          {
-            name: "title",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          },
-          {
-            name: "subtitle",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          },
-          {
-            name: "actionbar",
-            syntaxes: [
-              { type: "string", name: "text" }
-            ]
-          }
+          { name: "title", syntaxes: [{ type: "string", name: "text" }] },
+          { name: "subtitle", syntaxes: [{ type: "string", name: "text" }] },
+          { name: "actionbar", syntaxes: [{ type: "string", name: "text" }] }
         ]
       },
       { type: "json", name: "message" }
     ]
   },
 
+  // --- Toggledownfall ---
   {
     name: "toggledownfall",
     textures: "textures/ui/cloud_only_storage",
@@ -2685,6 +2391,7 @@ const command_list = [
     syntaxes: [{ type: "literal", value: "toggledownfall" }]
   },
 
+  // --- Camerashake ---
   {
     name: "camerashake",
     aliases: ["camerashake"],
@@ -2696,27 +2403,31 @@ const command_list = [
       {
         type: "choice",
         name: "action",
-        value: [
+        options: [
           {
             value: "add",
             next: [
               { type: "playerselector", name: "targets" },
               { type: "float", name: "amplitude", optional: true },
               { type: "int", name: "durationTicks" },
-              { type: "choice", name: "shakeType", value: [{ value: "rotational" }, { value: "positional" } ], optional: true }
+              {
+                type: "enum",
+                name: "shakeType",
+                optional: true,
+                value: ["rotational", "positional"]
+              }
             ]
           },
           {
             value: "stop",
-            next: [
-              { type: "playerselector", name: "targets", optional: true }
-            ]
+            next: [{ type: "playerselector", name: "targets", optional: true }]
           }
         ]
       }
     ]
   },
 
+  // --- List ---
   {
     name: "list",
     aliases: ["list"],
@@ -2724,11 +2435,10 @@ const command_list = [
     cc_hidden: true,
     description: "List players on the server or query server info",
     category: 3,
-    syntaxes: [
-      { type: "literal", value: "list" }
-    ]
+    syntaxes: [{ type: "literal", value: "list" }]
   },
 
+  // --- Locate ---
   {
     name: "locate",
     aliases: ["locate"],
@@ -2742,9 +2452,7 @@ const command_list = [
         options: [
           {
             name: "biome",
-            syntaxes: [
-              { type: "string", name: "biomeName" }
-            ]
+            syntaxes: [{ type: "string", name: "biomeName" }]
           },
           {
             name: "structure",
@@ -2758,6 +2466,7 @@ const command_list = [
     ]
   },
 
+  // --- Loot ---
   {
     name: "loot",
     aliases: ["loot"],
@@ -2797,6 +2506,7 @@ const command_list = [
     ]
   },
 
+  // --- Place ---
   {
     name: "place",
     aliases: ["place"],
@@ -2814,14 +2524,10 @@ const command_list = [
               { type: "blocktype", name: "block" },
               { type: "location", name: "pos", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "mode",
                 optional: true,
-                value: [
-                  { value: "replace" },
-                  { value: "keep" },
-                  { value: "destroy" }
-                ]
+                value: ["replace", "keep", "destroy"]
               }
             ]
           },
@@ -2838,10 +2544,10 @@ const command_list = [
               { type: "string", name: "structureName" },
               { type: "location", name: "destination", optional: true },
               {
-                type: "choice",
+                type: "enum",
                 name: "rotation",
                 optional: true,
-                value: [ { value: "0" }, { value: "90" }, { value: "180" }, { value: "270" } ]
+                value: ["0", "90", "180", "270"]
               }
             ]
           }
@@ -2850,6 +2556,7 @@ const command_list = [
     ]
   },
 
+  // --- Say ---
   {
     name: "say",
     aliases: ["say"],
@@ -2863,6 +2570,7 @@ const command_list = [
     ]
   },
 
+  // --- Script ---
   {
     name: "script",
     aliases: ["script"],
@@ -2871,47 +2579,53 @@ const command_list = [
     category: 4,
     syntaxes: [
       { type: "literal", value: "script" },
-
       {
         type: "choice",
         name: "category",
-        value: [
+        options: [
           {
             value: "debugger",
             next: [
               {
                 type: "choice",
                 name: "debuggerAction",
-                value: [
-                  { value: "listen", next: [{ type: "int", name: "port" }] },
-                  { value: "connect", next: [{ type: "string", name: "host", optional: true }, { type: "int", name: "port", optional: true }] },
+                options: [
+                  {
+                    value: "listen",
+                    next: [{ type: "int", name: "port" }]
+                  },
+                  {
+                    value: "connect",
+                    next: [
+                      { type: "string", name: "host", optional: true },
+                      { type: "int", name: "port", optional: true }
+                    ]
+                  },
                   { value: "close" }
                 ]
               }
             ]
           },
-
           {
             value: "profiler",
             next: [
               {
                 type: "choice",
                 name: "profilerAction",
-                value: [
+                options: [
                   { value: "start" },
                   { value: "stop" }
                 ]
               }
             ]
           },
-
           {
             value: "diagnostics",
             next: [
               {
                 type: "choice",
                 name: "diagnosticsAction",
-                value: [
+                options: [
                   { value: "startcapture" },
                   { value: "stopcapture" }
                 ]
@@ -2923,6 +2637,7 @@ const command_list = [
     ]
   },
 
+  // --- Scriptevent ---
   {
     name: "scriptevent",
     aliases: ["scriptevent"],
@@ -2936,6 +2651,7 @@ const command_list = [
     ]
   },
 
+  // --- Tell ---
   {
     name: "tell",
     cc_hidden: true,
@@ -2948,8 +2664,7 @@ const command_list = [
       { type: "playerselector", name: "target" },
       { type: "string", name: "message" }
     ]
-  },
-
+  }
 ];
 
 const block_command_list = [
@@ -3326,7 +3041,7 @@ function registerAllCommands(init) {
         }
         );
       } catch (e) {
-        system.run(() => print(`Konnte Befehl com2hard:${alias} nicht registrieren:`, e));
+        print(`Konnte Befehl com2hard:${alias} nicht registrieren:`, e)
       }
     }
   }
@@ -4867,7 +4582,7 @@ function registerBuiltInDynamicEnums(init) {
   function safeGetKeys(getAllCandidate, label) {
     try {
       if (!getAllCandidate || typeof getAllCandidate !== "function") {
-        system.run(() => print(`${label}.getAll ist nicht vorhanden oder keine Funktion.`));
+        print(`${label}.getAll ist nicht vorhanden oder keine Funktion.`)
         return [];
       }
       const all = getAllCandidate(); // synchron aufrufen
@@ -4881,7 +4596,7 @@ function registerBuiltInDynamicEnums(init) {
       if (all && typeof all === "object") return Object.keys(all);
       return [];
     } catch (e) {
-      system.run(() => print(`Fehler beim Erzeugen der ${label}-enum:`, e));
+      print(`Fehler beim Erzeugen der ${label}-enum:`, e)
       return [];
     }
   }
@@ -4892,7 +4607,7 @@ function registerBuiltInDynamicEnums(init) {
       init.customCommandRegistry.registerEnum("com2hard:effectType", effectValues);
       enums.effectType = "com2hard:effectType";
     } catch (e) {
-      system.run(() => print("registerEnum effectType fehlgeschlagen:", e));
+      print("registerEnum effectType fehlgeschlagen:", e)
     }
   }
 
@@ -4902,7 +4617,7 @@ function registerBuiltInDynamicEnums(init) {
       init.customCommandRegistry.registerEnum("com2hard:enchantType", enchValues);
       enums.enchantType = "com2hard:enchantType";
     } catch (e) {
-      system.run(() => print("registerEnum enchantType fehlgeschlagen:", e));
+      print("registerEnum enchantType fehlgeschlagen:", e)
     }
   }
 
@@ -4912,7 +4627,7 @@ function registerBuiltInDynamicEnums(init) {
       init.customCommandRegistry.registerEnum("com2hard:weathertype", weatherValues);
       enums.weathertype = "com2hard:weathertype";
     } catch (e) {
-      system.run(() => print("registerEnum weathertype fehlgeschlagen:", e));
+      print("registerEnum weathertype fehlgeschlagen:", e)
     }
   }
 
@@ -4937,7 +4652,7 @@ function registerInlineEnum(init, commandName, paramName, valuesArray) {
     init.customCommandRegistry.registerEnum(enumId, entries);
     return enumId;
   } catch (e) {
-    system.run(() => print(`Enum ${enumId} konnte nicht registriert werden:`, e));
+    print(`Enum ${enumId} konnte nicht registriert werden:`, e)
     return null;
   }
 }
@@ -4946,6 +4661,10 @@ function registerInlineEnum(init, commandName, paramName, valuesArray) {
 function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
   const mandatory = [];
   const optional = [];
+  const getChoiceOptions = (syntax) => Array.isArray(syntax?.options) ? syntax.options : [];
+  const getEnumValues = (syntax) => (Array.isArray(syntax?.value) ? syntax.value : [])
+    .map(v => String(v?.name ?? v?.value ?? v))
+    .filter(Boolean);
 
   function mapSimpleType(typeStr) {
     switch (typeStr) {
@@ -4970,7 +4689,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
     // Wenn das Syntax-Element ein 'next' hat, handelt es sich um verzweigte/nested Syntax,
     // die sich nicht flach in mandatory/optional abbilden lässt -> IGNORIEREN.
     if (syn && Object.prototype.hasOwnProperty.call(syn, "next") && Array.isArray(syn.next) && syn.next.length > 0) {
-      system.run(() => print(`Syntax-Element '${syn.name || syn.type}' in command '${cmd.name}' hat 'next' -> wird ignoriert (nicht abbildbar).`));
+      print(`Syntax-Element '${syn.name || syn.type}' in command '${cmd.name}' hat 'next' -> wird ignoriert (nicht abbildbar).`)
       continue;
     }
 
@@ -4981,7 +4700,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
     }
 
     if (syn.type === "repeat" || syn.type === "command_tail" || syn.type === "exit_loop" || syn.type === "can_exit_loop") {
-      system.run(() => print(`Syntax-Element 'choice' in command '${cmd.name}' wird nicht in CustomCommandParamType abgebildet.`));
+      print(`Syntax-Element '${syn.type}' in command '${cmd.name}' wird nicht in CustomCommandParamType abgebildet.`)
       continue;
     }
 
@@ -4994,16 +4713,44 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
         continue;
       } else {
         // **IGNORIERE** den Parameter wenn die dynamische enum nicht verfügbar ist (wie 'next' ungenutzt).
-        system.run(() => print(`Dynamische enum '${syn.type}' nicht vorhanden -> Parameter '${syn.name}' wird zu Unbekannt.`));
+        print(`Dynamische enum '${syn.type}' nicht vorhanden -> Parameter '${syn.name}' wird zu Unbekannt.`)
       }
     }
 
     // inline enums
-    if (syn.type === "choice" && (syn.options || syn.value)) {
-      const values = (syn.options || syn.value).map(v => v?.name ?? v?.value ?? v).filter(Boolean);
+    if (syn.type === "enum") {
+      const enumValues = getEnumValues(syn);
+      const enumId = registerInlineEnum(init, cmd.name, syn.name || "enum", enumValues);
+      if (!enumId) {
+        print(`Inline-enum für ${cmd.name}.${syn.name} wurde herausgefiltert -> kein Parameter.`);
+        continue;
+      }
+      const param = { type: CustomCommandParamType.Enum, name: enumId, optional: !!syn.optional };
+      (param.optional ? optional : mandatory).push(param);
+      continue;
+    }
+    if (syn.type === "choice") {
+      const options = getChoiceOptions(syn);
+      if (!options.length) {
+        print(`Choice '${syn.name || "choice"}' in command '${cmd.name}' hat keine Optionen -> wird nicht flach gemappt.`);
+        continue;
+      }
+      // Teilweise Abbildung: nur Optionen ohne Unter-Syntax als Enum zulassen.
+      const flatOptions = options.filter(opt => {
+        const optionSyntaxes = Array.isArray(opt?.syntaxes) ? opt.syntaxes : (Array.isArray(opt?.next) ? opt.next : []);
+        return optionSyntaxes.length === 0;
+      });
+      if (!flatOptions.length) {
+        print(`Choice '${syn.name || "choice"}' in command '${cmd.name}' hat nur Unter-Syntax -> wird nicht flach gemappt.`);
+        continue;
+      }
+      if (flatOptions.length !== options.length) {
+        print(`Choice '${syn.name || "choice"}' in command '${cmd.name}' wird teilweise als Enum gemappt (${flatOptions.length}/${options.length} Optionen ohne Unter-Syntax).`);
+      }
+      const values = flatOptions.map(v => String(v?.name ?? v?.value ?? "")).filter(Boolean);
       const enumId = registerInlineEnum(init, cmd.name, syn.name || "choice", values);
       if (!enumId) {
-        system.run(() => print(`Inline-choice f?r ${cmd.name}.${syn.name} wurde herausgefiltert -> kein Parameter.`));
+        print(`Inline-choice für ${cmd.name}.${syn.name} wurde herausgefiltert -> kein Parameter.`);
         continue;
       }
       const param = { type: CustomCommandParamType.Enum, name: enumId, optional: !!syn.optional };
@@ -5021,7 +4768,7 @@ function buildParamsFromTopLevel(init, cmd, enumsDynamic) {
     // Unbekannter Typ: fallback zu String
     const param = { type: CustomCommandParamType.String, name: syn.name || syn.type, optional: !!syn.optional };
     (param.optional ? optional : mandatory).push(param);
-    system.run(() => print(`Unbekannter param type '${syn.type}' bei command '${cmd.name}' -> als String registriert.`));
+    print(`Unbekannter param type '${syn.type}' bei command '${cmd.name}' -> als String registriert.`)
   }
 
   return { mandatory, optional };
@@ -5101,7 +4848,7 @@ function isLikelySyntaxMatch(input, typeDef, syntax) {
       return levenshtein(normalized.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(normalized.length * 0.4));
     }
     case "choice": {
-      const options = Array.isArray(syntax?.options) ? syntax.options : (Array.isArray(syntax?.value) ? syntax.value : []);
+      const options = Array.isArray(syntax?.options) ? syntax.options : [];
       if (!options.length) return false;
       const optionNames = options.map(o => String(o?.name ?? o?.value ?? "")).filter(Boolean);
       if (optionNames.some(v => v.toLowerCase() === value.toLowerCase())) return true;
@@ -5110,6 +4857,13 @@ function isLikelySyntaxMatch(input, typeDef, syntax) {
         const firstSyntax = optionSyntaxes?.[0];
         return firstSyntax && isLikelySyntaxMatch(input, firstSyntax.type, firstSyntax);
       });
+    }
+    case "enum": {
+      const values = (Array.isArray(syntax?.value) ? syntax.value : []).map(v => String(v?.name ?? v?.value ?? v)).filter(Boolean);
+      if (!values.length) return false;
+      if (values.some(v => v.toLowerCase() === value.toLowerCase())) return true;
+      const closest = findClosest(value, values, "enum");
+      return levenshtein(value.toLowerCase(), closest.toLowerCase()) <= Math.max(1, Math.floor(value.length * 0.4));
     }
     case "command_tail": return true;
     case "repeat": return true;
@@ -5240,6 +4994,10 @@ function fixArgument(typeDef, input) {
       const vals = (typeDef?.options || typeDef?.value || []).map(v => v?.name ?? v?.value ?? v).filter(Boolean);
       return vals.length ? findClosest(input, vals, "choice") : input;
     }
+    case "enum": {
+      const vals = (Array.isArray(typeDef?.value) ? typeDef.value : []).map(v => String(v?.name ?? v?.value ?? v)).filter(Boolean);
+      return vals.length ? findClosest(input, vals, "enum") : input;
+    }
     case "json": return isValidJson(input) ? input : "{}";
     case "command_tail": return input;
     case "repeat": return input;
@@ -5248,9 +5006,9 @@ function fixArgument(typeDef, input) {
 }
 
 function tryFixChoice(parts, index, choiceSyntax) {
-  if (!choiceSyntax || (!Array.isArray(choiceSyntax.options) && !Array.isArray(choiceSyntax.value))) return null;
+  if (!choiceSyntax || !Array.isArray(choiceSyntax.options)) return null;
 
-  const options = Array.isArray(choiceSyntax.options) ? choiceSyntax.options : choiceSyntax.value;
+  const options = choiceSyntax.options;
   for (const option of options) {
     const optionName = String(option?.name ?? option?.value ?? "");
     const optionSyntaxes = Array.isArray(option.syntaxes) ? option.syntaxes : (Array.isArray(option.next) ? option.next : []);
@@ -7093,7 +6851,7 @@ async function visual_command_generic(player, cmd, on_output) {
 
         while (count < max) {
           if (singleChoice) {
-            const options = Array.isArray(singleChoice.options) ? singleChoice.options : (Array.isArray(singleChoice.value) ? singleChoice.value : []);
+            const options = Array.isArray(singleChoice.options) ? singleChoice.options : [];
             const actions = options.map((option, idx) => ({
               id: option.name || option.value || `choice_option_${idx}`,
               name: option.name || option.value || `Option ${idx + 1}`
@@ -7211,7 +6969,7 @@ async function visual_command_generic(player, cmd, on_output) {
         continue;
       }
       if (part.type === "choice") {
-        const options = Array.isArray(part.options) ? part.options : (Array.isArray(part.value) ? part.value : []);
+        const options = Array.isArray(part.options) ? part.options : [];
         if (!options.length) continue;
         const actions = options.map((option, idx) => ({
           id: option.name || option.value || `choice_option_${idx}`,
@@ -7235,6 +6993,23 @@ async function visual_command_generic(player, cmd, on_output) {
           if (nestedRes?.requestRepeatExit) requestRepeatExit = true;
           if (nestedRes?.canExitLoop) canExitLoop = true;
         }
+        continue;
+      }
+      if (part.type === "enum") {
+        const values = (Array.isArray(part.value) ? part.value : []).map((val, idx) => ({
+          id: String(val?.name ?? val?.value ?? val ?? `enum_value_${idx}`),
+          name: String(val?.name ?? val?.value ?? val ?? `Value ${idx + 1}`)
+        }));
+        if (!values.length) continue;
+        let result = await menu_actions_input(player, {
+          title: "Visual commands - " + cmd.name,
+          prompt: `Choose value for ${part.name || "enum"}`,
+          actions: values,
+          optional: part.optional || false
+        });
+        if (result.skipped) break;
+        if (result.canceled) return { canceled: true };
+        appendToken(result.response);
         continue;
       }
       if (part.type === "entityType") {

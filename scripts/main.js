@@ -6,32 +6,21 @@ import { operatorMode } from "./mode.js"
 
 const version_info = {
   name: "Command&Achievement",
-  version: "v.7.1.0 RR3",
-  build: "B055",
+  version: "v.8.0.0",
+  build: "B056",
   release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1778877510264,
+  unix: 1780670072408,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
-      "Added Operator Mode to hide commands from non-operator players.",
-      "Reintroduced /tp, /camera, and /execute commands",
-      "Added /seed command for quick world-seed lookup",
-      "Introduced visual command support for chain editing",
-      "Added a Rawtext Editor for visual command",
     ],
     // general_changes
     general_changes: [
-      "Changelog now opens automatically after updating to a new version",
-      "Refined command list coverage and updated command syntaxes",
-      "Added an Environment section in About with hardware/platform details",
-      "Improved error handling and added more specific error messages for command execution failures",
     ],
     // bug_fixes
     bug_fixes: [
-      "Resolved admin-rights issues on Realms",
-      "Fixed a crash caused by inserting an undefined location in the visual command menu",
     ]
   }
 }
@@ -5849,15 +5838,79 @@ function anyplayerHasEffect() {
 }
 
 function extractErrorSnippet(message) {
-  const match = message.match(/"([^"]+)"/);
-  return match ? match[1] : '';
+  if (!message || typeof message !== "string") return "";
+
+  // Bedrock often marks the exact token as >>token<<
+  const markerMatch = message.match(/>>\s*([^<>]+?)\s*<</);
+  if (markerMatch && markerMatch[1]) return markerMatch[1].trim();
+
+  // Another common style: unexpected 'token'
+  const unexpectedQuoted = message.match(/unexpected\s+['"]([^'"]+)['"]/i);
+  if (unexpectedQuoted && unexpectedQuoted[1]) return unexpectedQuoted[1].trim();
+
+  // Unknown command: gameode
+  const unknownCommand = message.match(/unknown command:\s*([^\s.]+)/i);
+  if (unknownCommand && unknownCommand[1]) return unknownCommand[1].trim();
+
+  // Prefer quoted snippets; ignore long context fragments with spaces
+  const quotedMatches = [...message.matchAll(/["']([^"']+)["']/g)]
+    .map(m => m[1].trim())
+    .filter(Boolean)
+    .sort((a, b) => a.length - b.length);
+  const shortQuoted = quotedMatches.find(s => !/\s/.test(s));
+  if (shortQuoted) return shortQuoted;
+  if (quotedMatches.length > 0) return quotedMatches[0];
+
+  // Fallback patterns for common parser wording when quotes are missing
+  const patterns = [
+    /unexpected token\s+([^\s,.:;]+)/i,
+    /near\s+([^\s,.:;]+)/i,
+    /at\s+([^\s,.:;]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) return match[1].trim();
+  }
+
+  return "";
 }
 
 function highlightErrorInCommand(command, errorSnippet) {
-  if (!errorSnippet) return command;
+  if (!command || typeof command !== "string") return command;
+  if (!errorSnippet || typeof errorSnippet !== "string") return command;
 
-  const highlightedSnippet = '§c' + errorSnippet + '§7';
-  return command.replace(errorSnippet, highlightedSnippet);
+  const snippet = errorSnippet.trim();
+  if (!snippet) return command;
+
+  // Fast path: exact match
+  if (command.includes(snippet)) {
+    return command.replace(snippet, "§c" + snippet + "§7");
+  }
+
+  // Robust fallback: case-insensitive literal search
+  const escaped = snippet.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = command.match(new RegExp(escaped, "i"));
+  if (!match || !match[0]) return command;
+
+  return command.replace(match[0], "§c" + match[0] + "§7");
+}
+
+function isBedrockCommandError(message) {
+  if (!message || typeof message !== "string") return false;
+  const lower = message.toLowerCase();
+  return lower.includes("error occurred with parsing command params")
+    || lower.includes("unknown command:");
+}
+
+function formatDisplayErrorMessage(message) {
+  if (!message || typeof message !== "string") return "Unknown error";
+  if (!isBedrockCommandError(message)) return message;
+
+  // Keep only the command-related portion for cleaner UX
+  const match = message.match(/error occurred with parsing command params:\s*(.+)$/i);
+  if (match && match[1]) return match[1].trim();
+  return message.trim();
 }
 
 function getCompatibleEnchantmentTypes(item) {
@@ -6375,8 +6428,10 @@ async function execute_command(source, cmd, target = "server") {
     });
 
     update_save_data(save_data);
-    command_menu_result_e(source, e.message, cmd);
-    source.sendMessage("§c" + e.message);
+    const rawErrorMessage = (e && typeof e.message === "string") ? e.message : String(e);
+    const displayErrorMessage = formatDisplayErrorMessage(rawErrorMessage);
+    command_menu_result_e(source, rawErrorMessage, cmd);
+    source.sendMessage("§c" + displayErrorMessage);
     return false;
   }
 }
@@ -6389,18 +6444,16 @@ function command_menu_result_e(player, message, command, show_suggestion = true)
 
   form.title("Command Result");
 
-  const errorSnippet = extractErrorSnippet(message);
+  const rawMessage = (message && typeof message === "string") ? message : String(message);
+  const displayMessage = formatDisplayErrorMessage(rawMessage);
+  const errorSnippet = extractErrorSnippet(rawMessage);
 
   const highlightedCommand = highlightErrorInCommand(command, errorSnippet);
   form.body("Command:\n§o§7" + highlightedCommand);
-  form.label("§rFailed with:\n§c" + message)
+  form.label("§rFailed with:\n§c" + displayMessage)
 
   if (suggestion && suggestion.fix_available) {
     form.label("Did you mean:\n§a§o§7" + suggestion.command);
-    const feedbackLines = formatSuggestionFeedbackLines(suggestion);
-    if (feedbackLines.length) {
-      form.label("Why this suggestion:\n§7" + feedbackLines.join("\n"));
-    }
   }
 
   form.divider();
@@ -8578,16 +8631,17 @@ function dump_storage(player) {
 
   // Yes, that's right, you're not dumping the full "save_data". The player names are removed here for data protection reasons
   save_data = save_data.map(entry => {
-    if ("name" in entry) {
-      return { ...entry, name: "" };
+    const newEntry = { ...entry };
+    if ("name" in newEntry) {
+      newEntry.name = "";
     }
-    if ("version" in entry) {
-      return { ...entry };
+    if ("version" in newEntry) {
+      delete newEntry.version;
     }
-    return entry;
+    return newEntry;
   });
   // and this adds information about the dump date and version to ensure whether a dump matches a bug
-  save_data.push({ server_mode: server_mode, dump_unix:Date.now(), name:version_info.name, version:version_info.version, build:version_info.build });
+  save_data.push({ dump_unix:Date.now(), server_mode: server_mode, operator_mode: operatorMode, name:version_info.name, version:version_info.version, build:version_info.build });
 
   if (!server_mode || server_ip !== "") {
     form.body("Recommended way to dump");

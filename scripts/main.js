@@ -7,9 +7,9 @@ import { operatorMode } from "./mode.js"
 const version_info = {
   name: "Command&Achievement",
   version: "v.8.0.0",
-  build: "B056",
-  release_type: 2, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1780670072408,
+  build: "B057",
+  release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
+  unix: 1781382053376,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -2933,7 +2933,7 @@ function registerAllCommands(init) {
     permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
-      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? main_menu(p) : null);
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? TranslateMenuBuilder(p, main_menu(p)) : null);
     }
   });
 
@@ -3713,7 +3713,6 @@ async function gesture_nod() {
     playerHeadMovement.set(player.id, { state, timestamp: lastTime });
   }
 }
-
 
 
 /*------------------------
@@ -6016,198 +6015,396 @@ function buildEnchantmentCategories(item, compatibleEnchants) {
 }
 
 /*------------------------
- Menus
+  Menu & search functions
+-------------------------*/
+
+class Category {
+  /**
+   * @param {MenuBuilder} menuBuilder - Der MenuBuilder, zu dem diese Kategorie gehört.
+   * @param {string} name - Name der Kategorie (wird als Label angezeigt).
+   * @param {Object} [options] - Optionale Konfiguration.
+   * @param {boolean} [options.is_hidden_when_unavailable=false] - Ob die Kategorie ausgeblendet wird, wenn keine Buttons vorhanden sind.
+   * @param {string} [options.message] - Fehlermeldung, die angezeigt wird, wenn keine Buttons vorhanden sind.
+   */
+  constructor(menuBuilder, name, options = {}) {
+    this.menuBuilder = menuBuilder;
+    this.name = name;
+    this.buttons = [];
+    this.options = {
+      is_hidden_when_unavailable: false,
+      message: "",
+      ...options,
+    };
+  }
+
+  /**
+   * Fügt einen Button zu dieser Kategorie hinzu.
+   * @param {string} text - Text des Buttons.
+   * @param {string} icon - Icon des Buttons.
+   * @param {Function} callback - Callback-Funktion des Buttons.
+   * @returns {Category} - Gibt die Kategorie zurück, um Method Chaining zu ermöglichen.
+   */
+  button(text, icon, callback) {
+    this.buttons.push({ text, icon, callback });
+    return this;
+  }
+
+  /**
+   * Fügt einen Back-Button zu dieser Kategorie hinzu.
+   * @returns {Category} - Gibt die Kategorie zurück.
+   */
+  backButton() {
+    this.buttons.push({ text: "", icon: undefined, callback: () => console.log("Back button clicked") });
+    return this;
+  }
+}
+
+class MenuBuilder {
+  constructor() {
+    this.elements = []; // { type: "label" | "button" | "divider" | "header" | "category" | "footer", data: any }
+    this.categories = new Map(); // Speichert Category-Objekte für spätere Referenz
+    this.footerCategory = null; // Speichert die Footer-Kategorie
+  }
+
+  title(text) {
+    this.elements.push({ type: "title", data: text });
+    return this;
+  }
+
+  label(text) {
+    this.elements.push({ type: "label", data: text });
+    return this;
+  }
+
+  header(text) {
+    this.elements.push({ type: "header", data: text });
+    return this;
+  }
+
+  button(text, icon, callback) {
+    this.elements.push({ type: "button", data: { text, icon, callback } });
+    return this;
+  }
+
+  divider() {
+    this.elements.push({ type: "divider" });
+    return this;
+  }
+
+  /**
+   * Erstellt eine neue Kategorie und fügt sie dem MenuBuilder hinzu.
+   * @param {string} name - Name der Kategorie.
+   * @param {Object} [options] - Optionale Konfiguration.
+   * @returns {Category} - Gibt die neue Kategorie zurück.
+   */
+  category(name, options = {}) {
+    const category = new Category(this, name, options);
+    this.categories.set(name, category);
+    this.elements.push({
+      type: "category",
+      data: category,
+    });
+    return category;
+  }
+
+  /**
+   * Erstellt einen Footer als spezielle Kategorie.
+   * @param {string} [label] - Optional: Label für den Footer.
+   * @returns {Category} - Gibt die Footer-Kategorie zurück.
+   */
+  footer(label = "") {
+    this.footerCategory = new Category(this, label, { is_hidden_when_unavailable: false });
+    return this.footerCategory;
+  }
+}
+
+function TranslateMenuBuilder(player, menuBuilder) {
+  const form = new ActionFormData();
+  const actions = [];
+  const elements = [...menuBuilder.elements];
+
+  // 1. Alle Labels und Divider vorab sammeln
+  const allLabels = [];
+  const allDividers = [];
+
+  for (const element of elements) {
+    if (element.type === "label") {
+      allLabels.push(element);
+    } else if (element.type === "divider") {
+      allDividers.push(element);
+    } else if (element.type === "category") {
+      const { name, buttons, options } = element.data;
+      if (buttons.length === 0) {
+        if (!options.is_hidden_when_unavailable) {
+          allLabels.push({ type: "label", data: name });
+          if (options.message) {
+            allLabels.push({ type: "label", data: `§7${options.message}` });
+          }
+          allDividers.push({ type: "divider" });
+        }
+      } else {
+        allLabels.push({ type: "label", data: name });
+        allDividers.push({ type: "divider" });
+      }
+    }
+  }
+
+  // 2. Erstes Label und letzter Divider bestimmen
+  const firstLabelData = allLabels.length > 0 ? allLabels[0].data : null;
+  let firstLabelUsed = false;
+
+  // 3. Menü aufbauen
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i];
+    const isLastElement = i === elements.length - 1;
+
+    switch (element.type) {
+      case "title":
+        form.title(element.data);
+        break;
+
+      case "label":
+        if (!firstLabelUsed && element.data === firstLabelData) {
+          form.body(element.data);
+          firstLabelUsed = true;
+        } else {
+          form.label(element.data);
+        }
+        break;
+
+      case "header":
+        form.header(element.data);
+        break;
+
+      case "button":
+        element.data.icon
+          ? form.button(element.data.text, element.data.icon)
+          : form.button(element.data.text);
+        actions.push(element.data.callback);
+        break;
+
+      case "divider":
+        // Letzten Divider überspringen, wenn er am Ende steht
+        if (isLastElement) {
+          break;
+        }
+        form.divider();
+        break;
+
+      case "category":
+        const category = element.data;
+        const { name, buttons, options } = category;
+        const { is_hidden_when_unavailable = false, message = "" } = options;
+
+        if (buttons.length === 0) {
+          if (is_hidden_when_unavailable) {
+            break;
+          } else {
+            if (!firstLabelUsed && name === firstLabelData) {
+              form.body(name);
+              firstLabelUsed = true;
+            } else {
+              form.label(name);
+            }
+            if (message) {
+              form.label(`§7${message}`);
+            }
+            if (!(isLastElement && elements[i + 1]?.type !== "divider")) {
+              form.divider();
+            }
+          }
+        } else {
+          if (!firstLabelUsed && name === firstLabelData) {
+            form.body(name);
+            firstLabelUsed = true;
+          } else {
+            form.label(name);
+          }
+          for (const button of buttons) {
+            form.button(button.text, button.icon);
+            actions.push(button.callback);
+          }
+          if (!(isLastElement && elements[i + 1]?.type !== "divider")) {
+            form.divider();
+          }
+        }
+        break;
+    }
+  }
+
+  // 4. Footer hinzufügen (falls vorhanden)
+  if (menuBuilder.footerCategory) {
+    const footer = menuBuilder.footerCategory;
+    const hasButtons = footer.buttons.length > 0;
+
+    // Divider hinzufügen, wenn der letzte Eintrag kein Divider ist
+    const lastElement = elements[elements.length - 1];
+    if (lastElement?.type !== "divider") {
+      form.divider();
+    }
+
+    // Footer-Buttons hinzufügen
+    for (const button of footer.buttons) {
+      form.button(button.text, button.icon);
+      actions.push(button.callback);
+    }
+  }
+
+  form.show(player).then((response) => {
+    if (response.selection === undefined) return -1;
+    const action = actions[response.selection];
+    if (action) action(player);
+  });
+}
+
+
+/*------------------------
+ Main Menu
 -------------------------*/
 
 function main_menu(player) {
-  let form = new ActionFormData();
-  let actions = [];
-
+  let form = new MenuBuilder();
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
   if (old_version != undefined && playerIsAdmin(player)) {
-    old_version = undefined; // Einmalige Warnung pro Session
-
+    old_version = undefined;
     let build_date = convertUnixToDate(version_info.unix, save_data[0].utc || 0);
     return dictionary_about_changelog_legacy(player, build_date);
   }
 
   form.title("Main menu");
-  form.body("Select an option!");
 
   const { recommendedEntries } = generate_command_lists(player);
-
   const recommendVisible = (recommendedEntries.length > 0 && save_data[player_sd_index].recommendations);
   const pinedChains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).length > 0;
   const historyPreview = generate_history_entries(player);
 
-
   /*------------------------
     Main panel
   -------------------------*/
+  let canUseCommands = !(player.commandPermissionLevel == 0 && save_data[player_sd_index].allowed_commands.length == 0);
 
-  if (player.commandPermissionLevel == 0 && save_data[player_sd_index].allowed_commands.length == 0) {
-    form.label("§7There are no commands you are allowed to run! Ask your Admin.")
-  } else {
+  // Hauptkategorie für Befehle
+  const mainCategory = form.category("Main", { is_hidden_when_unavailable: false, message: "No commands available. Ask your Admin." });
 
-    form.button("Run a command", "textures/ui/color_plus");
-    actions.push(() => {
-      visual_command(player, (output) => {
-        if (!output || !output.command) return;
-
-        if (save_data[player_sd_index].quick_run) {
-          execute_command(player, output.command).then((success) => {
-            if (success && output.menu) {
-              output.menu();
-            }
-          });
-        } else {
-          command_menu(player, output.command, null, output.menu);
-        }
-      }, { from_main_menu: true, recommendVisible: !recommendVisible });
-    });
+  if (canUseCommands) {
+    mainCategory.button(
+      "Run a command",
+      "textures/ui/color_plus",
+      () => {
+        visual_command(player, (output) => {
+          if (!output || !output.command) return;
+          if (save_data[player_sd_index].quick_run) {
+            execute_command(player, output.command).then((success) => {
+              if (success && output.menu) output.menu();
+            });
+          } else {
+            command_menu(player, output.command, null, output.menu);
+          }
+        }, { from_main_menu: true, recommendVisible: !recommendVisible });
+      }
+    );
 
     if (canPlayerUseChains(player)) {
-      form.button("Chain Commands", "textures/items/chain");
-      actions.push(() => {
-        chain_overview(player);
-      });
+      mainCategory.button(
+        "Chain Commands",
+        "textures/items/chain",
+        () => chain_overview(player)
+      );
     }
 
     /*------------------------
       Preview panel
     -------------------------*/
-
-
-    // Chain Commands panel
     if (!recommendVisible && pinedChains && canPlayerUseChains(player)) {
-      form.divider();
-      form.label("Pined Chains");
+      const pinedChainsCategory = form.category("Pined Chains");
 
-      // Sortierte Kopie: pined zuerst, dann alphabetisch nach name
-      let sorted_chains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).slice().sort((a, b) => {
-        let nameA = (a.name || "").toLowerCase();
-        let nameB = (b.name || "").toLowerCase();
-        if (nameA < nameB) return -1;
-        if (nameA > nameB) return 1;
-        return 0;
-      });
+      let sorted_chains = save_data[player_sd_index].chain_commands
+        .filter(chain => chain.pined)
+        .slice()
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-      for (let i = 0; i < sorted_chains.length; i++) {
-        let chain = sorted_chains[i];
-
+      sorted_chains.forEach((chain) => {
         const cmdName = chain.name || "Unnamed Chain";
-        const statusText = (chain.state.successful ? "§2Successful§r" : "§cFailed§r");
+        const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
         const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
         const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
 
-        form.button(`${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`, chain.icon || "");
-
-        // Closure damit jeder Button das richtige chain referenziert
-        actions.push(((ch) => {
-          return () => {
-            // Originalindex in der unveränderten Liste ermitteln
-            let originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === ch);
+        pinedChainsCategory.button(
+          `${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`,
+          chain.icon || "",
+          () => {
+            const originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === chain);
             if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
               execute_chain(player, originalIndex);
             } else {
               chain_main(player, originalIndex);
             }
-          };
-        })(chain));
-      }
+          }
+        );
+      });
     }
 
-    // History panel
     if (!recommendVisible && historyPreview.length > 0 && !pinedChains) {
-      form.divider();
-      form.label("History");
+      const historyCategory = form.category("History");
 
-      const previewHistory = historyPreview.slice(0, historyPreview.length > 3 ? 2 : 3);
-
-      previewHistory.forEach((buttonEntry) => {
-        form.button(buttonEntry.label, buttonEntry.icon);
-        actions.push(buttonEntry.actionFn);
+      historyPreview.slice(0, historyPreview.length > 3 ? 2 : 3).forEach((buttonEntry) => {
+        historyCategory.button(buttonEntry.label, buttonEntry.icon, buttonEntry.actionFn);
       });
 
       if (historyPreview.length > 3) {
-        form.button("Show more!");
-        actions.push(() => {
-          multipage_time_menu(
-            player,
-            generate_history_entries(player),
-            canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null
-          );
-        });
+        historyCategory.button(
+          "Show more!",
+          null,
+          () => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null)
+        );
       }
     }
 
-    // Recommended panel
     if (recommendVisible) {
-      form.divider();
-      form.label("Recommended");
+      const recommendedCategory = form.category("Recommended");
 
       const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
-
-      recommendedEntries
-        .slice(0, displayCount)
-        .forEach(e => {
-          form.button(e.label, e.icon);
-          actions.push(e.actionFn);
-        });
+      recommendedEntries.slice(0, displayCount).forEach(e => {
+        recommendedCategory.button(e.label, e.icon, e.actionFn);
+      });
 
       if (recommendedEntries.length > displayCount) {
-        form.button("Show more!");
-        actions.push(() => visual_command_overview(player, recommendedEntries));
+        recommendedCategory.button("Show more!", null, () => visual_command_overview(player, recommendedEntries));
       }
     }
   }
-
 
 
   /*------------------------
     Settings panel
   -------------------------*/
-
-  form.divider()
-  form.label("Other");
+  const otherCategory = form.category("Other");
 
   if (historyPreview.length > 0 && (recommendVisible || pinedChains)) {
-    form.button("History", "textures/ui/icon_book_writable");
-    actions.push(() => {
-      multipage_time_menu(
-        player,
-        generate_history_entries(player),
-        canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null
-      );
-    });
+    otherCategory.button(
+      "History",
+      "textures/ui/icon_book_writable",
+      () => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null)
+    );
   }
 
-  // Button: Settings
-  form.button("Settings", "textures/ui/debug_glyph_color");
-  actions.push(() => {
-    settings_main(player);
-  });
+  otherCategory.button("Settings", "textures/ui/debug_glyph_color", () => settings_main(player));
 
   if (system_privileges !== 2) {
-    form.button("");
-    actions.push(() => {
-      world.scoreboard.addObjective("mm_data");
-      world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
-      player.runCommand("scriptevent multiple_menu:data");
-    });
+    otherCategory.button(
+      "",
+      null,
+      () => {
+        world.scoreboard.addObjective("mm_data");
+        world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
+        player.runCommand("scriptevent multiple_menu:data");
+      }
+    );
   }
 
-  form.show(player).then((response) => {
-    if (response.selection === undefined) {
-      return -1;
-    }
-
-    if (actions[response.selection]) {
-      actions[response.selection]();
-    }
-  });
+  return form;
 }
 
 /*------------------------

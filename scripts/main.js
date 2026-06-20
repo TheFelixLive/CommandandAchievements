@@ -1,5 +1,7 @@
 ﻿import { system, world, EntityTypes, EffectTypes, ItemTypes, BlockTypes, EnchantmentTypes, WeatherType, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus} from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData  } from "@minecraft/server-ui"
+import { CustomForm, MessageBox, ObservableBoolean, ObservableNumber, ObservableString } from "@minecraft/server-ui"
+
 import { operatorMode } from "./mode.js"
 
 // let operatorMode = world.getPackSettings()[com2hard:operator_mode]; // Will be enabled in the future when the API is available, for now it is determined by the subpack
@@ -7,17 +9,19 @@ import { operatorMode } from "./mode.js"
 const version_info = {
   name: "Command&Achievement",
   version: "v.8.0.0",
-  build: "B057",
+  build: "B058",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1781382053376,
+  unix: 1781997016496,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
     // new_features
     new_features: [
+      "Utilized the new OreUI Menu system to improve the performance and reliability of the addon",
     ],
     // general_changes
     general_changes: [
+      "Rewrote the entire menu system, to support search indexing",
     ],
     // bug_fixes
     bug_fixes: [
@@ -2933,7 +2937,7 @@ function registerAllCommands(init) {
     permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
-      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? TranslateMenuBuilder(p, main_menu(p)) : null);
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? TranslateMenuDefinition(p, main_menu(p)) : null);
     }
   });
 
@@ -4167,7 +4171,7 @@ function pushChainUnix(chainState, timestamp) {
 function generate_logs(player) {
   const logs = [];
   const save_data = load_save_data();
-  const min_unix = getLastLogin(save_data[0]) // Since Serber started
+  const min_unix = getLastLogin(save_data[0]) // Since Server started
 
   // Hilfsfunktion: relative Zeit
   const ago = (unix) => getRelativeTime(Date.now() - unix);
@@ -6020,14 +6024,14 @@ function buildEnchantmentCategories(item, compatibleEnchants) {
 
 class Category {
   /**
-   * @param {MenuBuilder} menuBuilder - Der MenuBuilder, zu dem diese Kategorie gehört.
+   * @param {MenuDefinition} MenuDefinition - Der MenuDefinition, zu dem diese Kategorie gehört.
    * @param {string} name - Name der Kategorie (wird als Label angezeigt).
    * @param {Object} [options] - Optionale Konfiguration.
    * @param {boolean} [options.is_hidden_when_unavailable=false] - Ob die Kategorie ausgeblendet wird, wenn keine Buttons vorhanden sind.
    * @param {string} [options.message] - Fehlermeldung, die angezeigt wird, wenn keine Buttons vorhanden sind.
    */
-  constructor(menuBuilder, name, options = {}) {
-    this.menuBuilder = menuBuilder;
+  constructor(MenuDefinition, name, options = {}) {
+    this.MenuDefinition = MenuDefinition;
     this.name = name;
     this.buttons = [];
     this.options = {
@@ -6048,18 +6052,9 @@ class Category {
     this.buttons.push({ text, icon, callback });
     return this;
   }
-
-  /**
-   * Fügt einen Back-Button zu dieser Kategorie hinzu.
-   * @returns {Category} - Gibt die Kategorie zurück.
-   */
-  backButton() {
-    this.buttons.push({ text: "", icon: undefined, callback: () => console.log("Back button clicked") });
-    return this;
-  }
 }
 
-class MenuBuilder {
+class MenuDefinition {
   constructor() {
     this.elements = []; // { type: "label" | "button" | "divider" | "header" | "category" | "footer", data: any }
     this.categories = new Map(); // Speichert Category-Objekte für spätere Referenz
@@ -6076,11 +6071,6 @@ class MenuBuilder {
     return this;
   }
 
-  header(text) {
-    this.elements.push({ type: "header", data: text });
-    return this;
-  }
-
   button(text, icon, callback) {
     this.elements.push({ type: "button", data: { text, icon, callback } });
     return this;
@@ -6092,7 +6082,7 @@ class MenuBuilder {
   }
 
   /**
-   * Erstellt eine neue Kategorie und fügt sie dem MenuBuilder hinzu.
+   * Erstellt eine neue Kategorie und fügt sie der MenuDefinition hinzu.
    * @param {string} name - Name der Kategorie.
    * @param {Object} [options] - Optionale Konfiguration.
    * @returns {Category} - Gibt die neue Kategorie zurück.
@@ -6113,148 +6103,261 @@ class MenuBuilder {
    * @returns {Category} - Gibt die Footer-Kategorie zurück.
    */
   footer(label = "") {
-    this.footerCategory = new Category(this, label, { is_hidden_when_unavailable: false });
+    this.footerCategory = new Category(this, label);
+    this.footerCategory.backbutton = (callback) => {
+      this.footerCategory.backbuttonCallback = callback;
+      return this.footerCategory;
+    };
     return this.footerCategory;
   }
 }
 
-function TranslateMenuBuilder(player, menuBuilder) {
-  const form = new ActionFormData();
-  const actions = [];
-  const elements = [...menuBuilder.elements];
+function TranslateMenuDefinition(player, MenuDefinition) {
+  const elements = [...MenuDefinition.elements];
 
-  // 1. Alle Labels und Divider vorab sammeln
-  const allLabels = [];
-  const allDividers = [];
+  const PAGE_SIZE = 20;
+  const OVERLAP = 5;
+
+  // Seiten erzeugen
+  const pages = [];
+  let currentPage = [];
 
   for (const element of elements) {
-    if (element.type === "label") {
-      allLabels.push(element);
-    } else if (element.type === "divider") {
-      allDividers.push(element);
-    } else if (element.type === "category") {
-      const { name, buttons, options } = element.data;
-      if (buttons.length === 0) {
-        if (!options.is_hidden_when_unavailable) {
-          allLabels.push({ type: "label", data: name });
-          if (options.message) {
-            allLabels.push({ type: "label", data: `§7${options.message}` });
-          }
-          allDividers.push({ type: "divider" });
-        }
-      } else {
-        allLabels.push({ type: "label", data: name });
-        allDividers.push({ type: "divider" });
-      }
+    currentPage.push(element);
+
+    if (currentPage.length >= PAGE_SIZE) {
+      const moved = currentPage.splice(
+        currentPage.length - OVERLAP,
+        OVERLAP
+      );
+
+      pages.push([...currentPage]);
+      currentPage = [...moved];
     }
   }
 
-  // 2. Erstes Label und letzter Divider bestimmen
-  const firstLabelData = allLabels.length > 0 ? allLabels[0].data : null;
-  let firstLabelUsed = false;
+  if (currentPage.length > 0) {
+    pages.push([...currentPage]);
+  }
 
-  // 3. Menü aufbauen
-  for (let i = 0; i < elements.length; i++) {
-    const element = elements[i];
-    const isLastElement = i === elements.length - 1;
+  const pageing_enabled = pages.length > 1;
 
-    switch (element.type) {
-      case "title":
-        form.title(element.data);
-        break;
+  function showPage(pageIndex) {
+    const form = new ActionFormData();
+    const actions = [];
 
-      case "label":
-        if (!firstLabelUsed && element.data === firstLabelData) {
-          form.body(element.data);
-          firstLabelUsed = true;
-        } else {
-          form.label(element.data);
-        }
-        break;
+    const pageElements = pages[pageIndex];
 
-      case "header":
-        form.header(element.data);
-        break;
+    // Erstes Label bestimmen
+    const allLabels = [];
 
-      case "button":
-        element.data.icon
-          ? form.button(element.data.text, element.data.icon)
-          : form.button(element.data.text);
-        actions.push(element.data.callback);
-        break;
+    for (const element of pageElements) {
+      if (element.type === "label") {
+        allLabels.push(element);
+      } else if (element.type === "category") {
+        allLabels.push({
+          type: "label",
+          data: element.data.name
+        });
+      }
+    }
 
-      case "divider":
-        // Letzten Divider überspringen, wenn er am Ende steht
-        if (isLastElement) {
+    const firstLabelData =
+      allLabels.length > 0
+        ? allLabels[0].data
+        : null;
+
+    let firstLabelUsed = false;
+
+    // Menü aufbauen
+    for (let i = 0; i < pageElements.length; i++) {
+      const element = pageElements[i];
+      const isLastElement = i === pageElements.length - 1;
+
+      switch (element.type) {
+        case "title":
+          form.title(
+            element.data +
+            (
+              pageing_enabled
+                ? ` (${pageIndex + 1}/${pages.length})`
+                : ""
+            )
+          );
           break;
-        }
-        form.divider();
-        break;
 
-      case "category":
-        const category = element.data;
-        const { name, buttons, options } = category;
-        const { is_hidden_when_unavailable = false, message = "" } = options;
-
-        if (buttons.length === 0) {
-          if (is_hidden_when_unavailable) {
-            break;
+        case "label":
+          if (
+            !firstLabelUsed &&
+            element.data === firstLabelData
+          ) {
+            form.body(element.data);
+            firstLabelUsed = true;
           } else {
-            if (!firstLabelUsed && name === firstLabelData) {
+            form.label(element.data);
+          }
+          break;
+
+        case "header":
+          form.header(element.data);
+          break;
+
+        case "button":
+          if (element.data.icon) {
+            form.button(
+              element.data.text,
+              element.data.icon
+            );
+          } else {
+            form.button(element.data.text);
+          }
+
+          actions.push(element.data.callback);
+          break;
+
+        case "divider":
+          if (!isLastElement) {
+            form.divider();
+          }
+          break;
+
+        case "category": {
+          const {
+            name,
+            buttons,
+            options
+          } = element.data;
+
+          const {
+            is_hidden_when_unavailable = false,
+            message = ""
+          } = options;
+
+          if (buttons.length === 0) {
+            if (is_hidden_when_unavailable) {
+              break;
+            }
+
+            if (
+              !firstLabelUsed &&
+              name === firstLabelData
+            ) {
               form.body(name);
               firstLabelUsed = true;
             } else {
               form.label(name);
             }
+
             if (message) {
               form.label(`§7${message}`);
             }
-            if (!(isLastElement && elements[i + 1]?.type !== "divider")) {
+
+            if (!isLastElement) {
+              form.divider();
+            }
+          } else {
+            if (
+              !firstLabelUsed &&
+              name === firstLabelData
+            ) {
+              form.body(name);
+              firstLabelUsed = true;
+            } else {
+              form.label(name);
+            }
+
+            for (const button of buttons) {
+              form.button(
+                button.text,
+                button.icon
+              );
+
+              actions.push(button.callback);
+            }
+
+            if (!isLastElement) {
               form.divider();
             }
           }
-        } else {
-          if (!firstLabelUsed && name === firstLabelData) {
-            form.body(name);
-            firstLabelUsed = true;
-          } else {
-            form.label(name);
-          }
-          for (const button of buttons) {
-            form.button(button.text, button.icon);
-            actions.push(button.callback);
-          }
-          if (!(isLastElement && elements[i + 1]?.type !== "divider")) {
-            form.divider();
-          }
+
+          break;
         }
-        break;
+      }
     }
-  }
 
-  // 4. Footer hinzufügen (falls vorhanden)
-  if (menuBuilder.footerCategory) {
-    const footer = menuBuilder.footerCategory;
-    const hasButtons = footer.buttons.length > 0;
+    // Footer
+    const footer = MenuDefinition.footerCategory;
 
-    // Divider hinzufügen, wenn der letzte Eintrag kein Divider ist
-    const lastElement = elements[elements.length - 1];
-    if (lastElement?.type !== "divider") {
+    if (footer) {
+      const lastElement =
+        pageElements[pageElements.length - 1];
+
+      if (lastElement?.type !== "divider") {
+        form.divider();
+      }
+
+      const footerLabel =
+        footer.name
+          ? footer.name
+          : (
+              pageing_enabled &&
+              footer.buttons.length > 0
+            )
+              ? "Other"
+              : null;
+
+      if (footerLabel) {
+        form.label(footerLabel);
+      }
+
+      for (const button of footer.buttons) {
+        form.button(
+          button.text,
+          button.icon
+        );
+
+        actions.push(button.callback);
+      }
+    }
+
+    // Navigation
+    if (pageing_enabled) {
+      form.divider();
+
+      if (pageIndex > 0) {
+        form.button("Prev");
+        actions.push(() => showPage(pageIndex - 1));
+      }
+
+      if (pageIndex < pages.length - 1) {
+        form.button("Next");
+        actions.push(() => showPage(pageIndex + 1));
+      }
+    }
+
+    // Back Button
+    if (pageing_enabled) {
       form.divider();
     }
 
-    // Footer-Buttons hinzufügen
-    for (const button of footer.buttons) {
-      form.button(button.text, button.icon);
-      actions.push(button.callback);
-    }
+    form.button("");
+    actions.push(
+      footer?.backbuttonCallback ||
+      (() => print("Back button pressed"))
+    );
+
+    form.show(player).then((response) => {
+      if (response.selection === undefined) {
+        return -1;
+      }
+      const action =actions[response.selection];
+      if (action) {
+        action(player);
+      }
+    });
   }
 
-  form.show(player).then((response) => {
-    if (response.selection === undefined) return -1;
-    const action = actions[response.selection];
-    if (action) action(player);
-  });
+  showPage(0);
 }
 
 
@@ -6263,15 +6366,9 @@ function TranslateMenuBuilder(player, menuBuilder) {
 -------------------------*/
 
 function main_menu(player) {
-  let form = new MenuBuilder();
+  let form = new MenuDefinition();
   let save_data = load_save_data();
   let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
-
-  if (old_version != undefined && playerIsAdmin(player)) {
-    old_version = undefined;
-    let build_date = convertUnixToDate(version_info.unix, save_data[0].utc || 0);
-    return dictionary_about_changelog_legacy(player, build_date);
-  }
 
   form.title("Main menu");
 
@@ -6380,7 +6477,7 @@ function main_menu(player) {
   /*------------------------
     Settings panel
   -------------------------*/
-  const otherCategory = form.category("Other");
+  const otherCategory = form.footer("Other");
 
   if (historyPreview.length > 0 && (recommendVisible || pinedChains)) {
     otherCategory.button(
@@ -6393,9 +6490,7 @@ function main_menu(player) {
   otherCategory.button("Settings", "textures/ui/debug_glyph_color", () => settings_main(player));
 
   if (system_privileges !== 2) {
-    otherCategory.button(
-      "",
-      null,
+    otherCategory.backbutton(
       () => {
         world.scoreboard.addObjective("mm_data");
         world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
@@ -9850,6 +9945,12 @@ function debug_main(player) {
   });
 
 
+  form.button("CustomForm demo");
+  actions.push(() => {
+    return custom_form_demo(player)
+  });
+
+
   form.divider()
   form.button("");
   actions.push(() => {
@@ -9864,6 +9965,139 @@ function debug_main(player) {
       actions[response.selection]();
     }
   });
+}
+
+function custom_form_demo(player) {
+  const dropdownValue = new ObservableNumber(
+      1,
+      { clientWritable: true }
+  );
+
+  const sliderValue = new ObservableNumber(
+      50,
+      { clientWritable: true }
+  );
+
+  const textValue = new ObservableString(
+      "Hello World",
+      { clientWritable: true }
+  );
+
+  const toggleValue = new ObservableBoolean(
+      true,
+      { clientWritable: true }
+  );
+
+  const form = new CustomForm(player, "DDUI Demo");
+
+  form.button(
+      "Test",
+      async () => {
+        form.close();
+        system.run(() => {
+          MessageBox_test(player);
+        });
+      },
+      {
+          disabled: false,
+          tooltip: "Test",
+          visible: true
+      }
+  );
+
+  form.spacer();
+
+  form.toggle(
+      "Test",
+      toggleValue,
+      {
+          description: "Hello World",
+          disabled: true
+      }
+  );
+
+  form.spacer();
+
+  form.label("Test");
+
+  form.spacer();
+
+  form.textField(
+      "Textfeld",
+      textValue,
+      {
+          description: "Schreibe etwas"
+      }
+  );
+
+  form.slider(
+      "Slider",
+      sliderValue,
+      0,
+      100,
+      {
+          description: "Wähle einen Wert"
+      }
+  );
+
+
+
+  form.dropdown(
+      "Test",
+      dropdownValue,
+      [
+          {
+              label: "Test",
+              description: "Test",
+              value: 0
+          },
+          {
+              label: "Hello",
+              description: "World",
+              value: 1
+          }
+      ],
+      {
+          disabled: false,
+          description: "Test",
+          visible: true
+      }
+  );
+
+  form.divider();
+
+  form.button(
+      "Reload",
+      () => {
+        form.close();
+        system.run(() => {
+          custom_form_demo(player);
+        });
+      }
+  );
+
+  form.show();
+}
+
+function MessageBox_test(player) {
+    const form = new MessageBox(player, "title");
+
+    form.body("body");
+
+    form.button1("button1");
+
+    form.show().then((res) => {
+        if (res.selection === undefined) {
+            console.log("Closed");
+            return;
+        }
+
+        if (res.selection === 1) {
+            console.log("Yes");
+        } else if (res.selection === 2) {
+            console.log("No");
+        }
+    });
 }
 
 function test_fix(player) {

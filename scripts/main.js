@@ -9,9 +9,9 @@ import { operatorMode } from "./mode.js"
 const version_info = {
   name: "Command&Achievement",
   version: "v.8.0.0",
-  build: "B058",
+  build: "B059",
   release_type: 0, // 0 = Development version (with debug); 1 = Beta version; 2 = Stable version
-  unix: 1781997016496,
+  unix: 1782399559150,
   update_message_period_unix: 6 * 30 * 24 * 60 * 60 * 1000, // Normally 6 months = 15897600
   uuid: "a9bdf889-7080-419c-b23c-adfc8704c4c1",
   changelog: {
@@ -2937,7 +2937,7 @@ function registerAllCommands(init) {
     permissionLevel: operatorMode? 1 : 0,
     cheatsRequired: false,
     handler: p => {
-      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? TranslateMenuDefinition(p, main_menu(p)) : null);
+      system.run(() => system_privileges == 1 ? multiple_menu(p) : canPlayerUseMenu(p) && (operatorMode ? p.commandPermissionLevel >= 1 : true) ? main_menu(p) : null);
     }
   });
 
@@ -6022,484 +6022,181 @@ function buildEnchantmentCategories(item, compatibleEnchants) {
   Menu & search functions
 -------------------------*/
 
-class Category {
-  /**
-   * @param {MenuDefinition} MenuDefinition - Der MenuDefinition, zu dem diese Kategorie gehört.
-   * @param {string} name - Name der Kategorie (wird als Label angezeigt).
-   * @param {Object} [options] - Optionale Konfiguration.
-   * @param {boolean} [options.is_hidden_when_unavailable=false] - Ob die Kategorie ausgeblendet wird, wenn keine Buttons vorhanden sind.
-   * @param {string} [options.message] - Fehlermeldung, die angezeigt wird, wenn keine Buttons vorhanden sind.
-   */
-  constructor(MenuDefinition, name, options = {}) {
-    this.MenuDefinition = MenuDefinition;
-    this.name = name;
-    this.buttons = [];
-    this.options = {
-      is_hidden_when_unavailable: false,
-      message: "",
-      ...options,
-    };
-  }
-
-  /**
-   * Fügt einen Button zu dieser Kategorie hinzu.
-   * @param {string} text - Text des Buttons.
-   * @param {string} icon - Icon des Buttons.
-   * @param {Function} callback - Callback-Funktion des Buttons.
-   * @returns {Category} - Gibt die Kategorie zurück, um Method Chaining zu ermöglichen.
-   */
-  button(text, icon, callback) {
-    this.buttons.push({ text, icon, callback });
-    return this;
-  }
-}
-
-class MenuDefinition {
-  constructor() {
-    this.elements = []; // { type: "label" | "button" | "divider" | "header" | "category" | "footer", data: any }
-    this.categories = new Map(); // Speichert Category-Objekte für spätere Referenz
-    this.footerCategory = null; // Speichert die Footer-Kategorie
-  }
-
-  title(text) {
-    this.elements.push({ type: "title", data: text });
-    return this;
-  }
-
-  label(text) {
-    this.elements.push({ type: "label", data: text });
-    return this;
-  }
-
-  button(text, icon, callback) {
-    this.elements.push({ type: "button", data: { text, icon, callback } });
-    return this;
-  }
-
-  divider() {
-    this.elements.push({ type: "divider" });
-    return this;
-  }
-
-  /**
-   * Erstellt eine neue Kategorie und fügt sie der MenuDefinition hinzu.
-   * @param {string} name - Name der Kategorie.
-   * @param {Object} [options] - Optionale Konfiguration.
-   * @returns {Category} - Gibt die neue Kategorie zurück.
-   */
-  category(name, options = {}) {
-    const category = new Category(this, name, options);
-    this.categories.set(name, category);
-    this.elements.push({
-      type: "category",
-      data: category,
-    });
-    return category;
-  }
-
-  /**
-   * Erstellt einen Footer als spezielle Kategorie.
-   * @param {string} [label] - Optional: Label für den Footer.
-   * @returns {Category} - Gibt die Footer-Kategorie zurück.
-   */
-  footer(label = "") {
-    this.footerCategory = new Category(this, label);
-    this.footerCategory.backbutton = (callback) => {
-      this.footerCategory.backbuttonCallback = callback;
-      return this.footerCategory;
-    };
-    return this.footerCategory;
-  }
-}
-
-function TranslateMenuDefinition(player, MenuDefinition) {
-  const elements = [...MenuDefinition.elements];
-
-  const PAGE_SIZE = 20;
-  const OVERLAP = 5;
-
-  // Seiten erzeugen
-  const pages = [];
-  let currentPage = [];
-
-  for (const element of elements) {
-    currentPage.push(element);
-
-    if (currentPage.length >= PAGE_SIZE) {
-      const moved = currentPage.splice(
-        currentPage.length - OVERLAP,
-        OVERLAP
-      );
-
-      pages.push([...currentPage]);
-      currentPage = [...moved];
-    }
-  }
-
-  if (currentPage.length > 0) {
-    pages.push([...currentPage]);
-  }
-
-  const pageing_enabled = pages.length > 1;
-
-  function showPage(pageIndex) {
-    const form = new ActionFormData();
-    const actions = [];
-
-    const pageElements = pages[pageIndex];
-
-    // Erstes Label bestimmen
-    const allLabels = [];
-
-    for (const element of pageElements) {
-      if (element.type === "label") {
-        allLabels.push(element);
-      } else if (element.type === "category") {
-        allLabels.push({
-          type: "label",
-          data: element.data.name
-        });
-      }
-    }
-
-    const firstLabelData =
-      allLabels.length > 0
-        ? allLabels[0].data
-        : null;
-
-    let firstLabelUsed = false;
-
-    // Menü aufbauen
-    for (let i = 0; i < pageElements.length; i++) {
-      const element = pageElements[i];
-      const isLastElement = i === pageElements.length - 1;
-
-      switch (element.type) {
-        case "title":
-          form.title(
-            element.data +
-            (
-              pageing_enabled
-                ? ` (${pageIndex + 1}/${pages.length})`
-                : ""
-            )
-          );
-          break;
-
-        case "label":
-          if (
-            !firstLabelUsed &&
-            element.data === firstLabelData
-          ) {
-            form.body(element.data);
-            firstLabelUsed = true;
-          } else {
-            form.label(element.data);
-          }
-          break;
-
-        case "header":
-          form.header(element.data);
-          break;
-
-        case "button":
-          if (element.data.icon) {
-            form.button(
-              element.data.text,
-              element.data.icon
-            );
-          } else {
-            form.button(element.data.text);
-          }
-
-          actions.push(element.data.callback);
-          break;
-
-        case "divider":
-          if (!isLastElement) {
-            form.divider();
-          }
-          break;
-
-        case "category": {
-          const {
-            name,
-            buttons,
-            options
-          } = element.data;
-
-          const {
-            is_hidden_when_unavailable = false,
-            message = ""
-          } = options;
-
-          if (buttons.length === 0) {
-            if (is_hidden_when_unavailable) {
-              break;
-            }
-
-            if (
-              !firstLabelUsed &&
-              name === firstLabelData
-            ) {
-              form.body(name);
-              firstLabelUsed = true;
-            } else {
-              form.label(name);
-            }
-
-            if (message) {
-              form.label(`§7${message}`);
-            }
-
-            if (!isLastElement) {
-              form.divider();
-            }
-          } else {
-            if (
-              !firstLabelUsed &&
-              name === firstLabelData
-            ) {
-              form.body(name);
-              firstLabelUsed = true;
-            } else {
-              form.label(name);
-            }
-
-            for (const button of buttons) {
-              form.button(
-                button.text,
-                button.icon
-              );
-
-              actions.push(button.callback);
-            }
-
-            if (!isLastElement) {
-              form.divider();
-            }
-          }
-
-          break;
-        }
-      }
-    }
-
-    // Footer
-    const footer = MenuDefinition.footerCategory;
-
-    if (footer) {
-      const lastElement =
-        pageElements[pageElements.length - 1];
-
-      if (lastElement?.type !== "divider") {
-        form.divider();
-      }
-
-      const footerLabel =
-        footer.name
-          ? footer.name
-          : (
-              pageing_enabled &&
-              footer.buttons.length > 0
-            )
-              ? "Other"
-              : null;
-
-      if (footerLabel) {
-        form.label(footerLabel);
-      }
-
-      for (const button of footer.buttons) {
-        form.button(
-          button.text,
-          button.icon
-        );
-
-        actions.push(button.callback);
-      }
-    }
-
-    // Navigation
-    if (pageing_enabled) {
-      form.divider();
-
-      if (pageIndex > 0) {
-        form.button("Prev");
-        actions.push(() => showPage(pageIndex - 1));
-      }
-
-      if (pageIndex < pages.length - 1) {
-        form.button("Next");
-        actions.push(() => showPage(pageIndex + 1));
-      }
-    }
-
-    // Back Button
-    if (pageing_enabled) {
-      form.divider();
-    }
-
-    form.button("");
-    actions.push(
-      footer?.backbuttonCallback ||
-      (() => print("Back button pressed"))
-    );
-
-    form.show(player).then((response) => {
-      if (response.selection === undefined) {
-        return -1;
-      }
-      const action =actions[response.selection];
-      if (action) {
-        action(player);
-      }
-    });
-  }
-
-  showPage(0);
-}
-
-
 /*------------------------
  Main Menu
 -------------------------*/
 
 function main_menu(player) {
-  let form = new MenuDefinition();
-  let save_data = load_save_data();
-  let player_sd_index = save_data.findIndex(entry => entry.id === player.id);
+  const form = new CustomForm(player, "Main Menu");
+  const save_data = load_save_data();
+  const player_sd_index = save_data.findIndex(entry => entry.id === player.id);
 
-  form.title("Main menu");
-
+  // Logik für die Anzeige der Kategorien und Buttons
   const { recommendedEntries } = generate_command_lists(player);
   const recommendVisible = (recommendedEntries.length > 0 && save_data[player_sd_index].recommendations);
   const pinedChains = save_data[player_sd_index].chain_commands.filter(chain => chain.pined).length > 0;
   const historyPreview = generate_history_entries(player);
-
-  /*------------------------
-    Main panel
-  -------------------------*/
-  let canUseCommands = !(player.commandPermissionLevel == 0 && save_data[player_sd_index].allowed_commands.length == 0);
-
-  // Hauptkategorie für Befehle
-  const mainCategory = form.category("Main", { is_hidden_when_unavailable: false, message: "No commands available. Ask your Admin." });
+  const canUseCommands = !(player.commandPermissionLevel == 0 && save_data[player_sd_index].allowed_commands.length == 0);
 
   if (canUseCommands) {
-    mainCategory.button(
-      "Run a command",
-      "textures/ui/color_plus",
-      () => {
-        visual_command(player, (output) => {
-          if (!output || !output.command) return;
-          if (save_data[player_sd_index].quick_run) {
-            execute_command(player, output.command).then((success) => {
-              if (success && output.menu) output.menu();
-            });
-          } else {
-            command_menu(player, output.command, null, output.menu);
-          }
-        }, { from_main_menu: true, recommendVisible: !recommendVisible });
-      }
-    );
-
-    if (canPlayerUseChains(player)) {
-      mainCategory.button(
-        "Chain Commands",
-        "textures/items/chain",
-        () => chain_overview(player)
+      form.button(
+          "Run a command",
+          async () => {
+              form.close();
+              system.run(() => {
+                  visual_command(player, (output) => {
+                      if (!output || !output.command) return;
+                      if (save_data[player_sd_index].quick_run) {
+                          execute_command(player, output.command).then((success) => {
+                              if (success && output.menu) output.menu();
+                          });
+                      } else {
+                          command_menu(player, output.command, null, output.menu);
+                      }
+                  }, { from_main_menu: true, recommendVisible: !recommendVisible });
+              });
+          },
+          { tooltip: "Run a command" }
       );
-    }
 
-    /*------------------------
-      Preview panel
-    -------------------------*/
-    if (!recommendVisible && pinedChains && canPlayerUseChains(player)) {
-      const pinedChainsCategory = form.category("Pined Chains");
+      form.button(
+          "Chain Commands",
+          async () => {
+              form.close();
+              system.run(() => chain_overview(player));
+          },
+          { tooltip: "Open Chain Commands", disabled: !canPlayerUseChains(player) }
+      );
+      form.divider();
+  }
 
-      let sorted_chains = save_data[player_sd_index].chain_commands
-        .filter(chain => chain.pined)
-        .slice()
-        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  // Pined Chains
+  if (!recommendVisible && pinedChains && canPlayerUseChains(player)) {
+      form.label("Pined Chains");
+      form.spacer();
+      const sorted_chains = save_data[player_sd_index].chain_commands
+          .filter(chain => chain.pined)
+          .slice()
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
       sorted_chains.forEach((chain) => {
-        const cmdName = chain.name || "Unnamed Chain";
-        const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
-        const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
-        const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
+          const cmdName = chain.name || "Unnamed Chain";
+          const statusText = chain.state.successful ? "§2Successful§r" : "§cFailed§r";
+          const lastUnix = Array.isArray(chain.state.unix) ? chain.state.unix[chain.state.unix.length - 1] : chain.state.unix;
+          const relativeTime = lastUnix != null ? getRelativeTime(Date.now() - lastUnix) : "Never";
 
-        pinedChainsCategory.button(
-          `${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`,
-          chain.icon || "",
-          () => {
-            const originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === chain);
-            if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
-              execute_chain(player, originalIndex);
-            } else {
-              chain_main(player, originalIndex);
-            }
-          }
-        );
+          form.button(
+              `${cmdName}\n${chain.state.successful === null ? "" : `${statusText} | ${relativeTime} ago`}`,
+              async () => {
+                  form.close();
+                  const originalIndex = save_data[player_sd_index].chain_commands.findIndex(c => c === chain);
+                  if (chain.commands.length !== 0 && save_data[player_sd_index].quick_run) {
+                      system.run(() => execute_chain(player, originalIndex));
+                  } else {
+                      system.run(() => chain_main(player, originalIndex));
+                  }
+              },
+              { tooltip: `Run ${cmdName}` }
+          );
       });
-    }
+  }
 
-    if (!recommendVisible && historyPreview.length > 0 && !pinedChains) {
-      const historyCategory = form.category("History");
-
+  // History Preview
+  if (!recommendVisible && historyPreview.length > 0 && !pinedChains) {
+      form.label("History");
+      form.spacer();
       historyPreview.slice(0, historyPreview.length > 3 ? 2 : 3).forEach((buttonEntry) => {
-        historyCategory.button(buttonEntry.label, buttonEntry.icon, buttonEntry.actionFn);
+          form.button(
+              buttonEntry.label,
+              async () => {
+                  form.close();
+                  system.run(buttonEntry.actionFn);
+              },
+              { tooltip: buttonEntry.label }
+          );
       });
 
       if (historyPreview.length > 3) {
-        historyCategory.button(
-          "Show more!",
-          null,
-          () => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null)
-        );
+          form.button(
+              "Show more!",
+              async () => {
+                  form.close();
+                  system.run(() => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null));
+              },
+              { tooltip: "Show more history" }
+          );
       }
-    }
+  }
 
-    if (recommendVisible) {
-      const recommendedCategory = form.category("Recommended");
-
+  // Recommended
+  if (recommendVisible) {
+      form.label("Recommended");
+      form.spacer();
       const displayCount = recommendedEntries.length >= 4 ? 2 : 3;
       recommendedEntries.slice(0, displayCount).forEach(e => {
-        recommendedCategory.button(e.label, e.icon, e.actionFn);
+          form.button(
+              e.label,
+              async () => {
+                  form.close();
+                  system.run(e.actionFn);
+              },
+              { tooltip: e.label }
+          );
       });
 
       if (recommendedEntries.length > displayCount) {
-        recommendedCategory.button("Show more!", null, () => visual_command_overview(player, recommendedEntries));
+          form.button(
+              "Show more!",
+              async () => {
+                  form.close();
+                  system.run(() => visual_command_overview(player, recommendedEntries));
+              },
+              { tooltip: "Show more recommendations" }
+          );
       }
-    }
   }
 
-
-  /*------------------------
-    Settings panel
-  -------------------------*/
-  const otherCategory = form.footer("Other");
+  // Other (Footer)
+  if (recommendVisible || !pinedChains || !canPlayerUseChains(player) && !historyPreview.length) {
+      form.divider();
+  }
+  form.label("Other");
+  form.spacer();
 
   if (historyPreview.length > 0 && (recommendVisible || pinedChains)) {
-    otherCategory.button(
-      "History",
-      "textures/ui/icon_book_writable",
-      () => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null)
-    );
+      form.button(
+          "History",
+          async () => {
+              form.close();
+              system.run(() => multipage_time_menu(player, generate_history_entries(player), canPlayerUseMenu(player) && (operatorMode ? player.commandPermissionLevel >= 1 : true) ? (p) => main_menu(p) : null));
+          },
+          { tooltip: "Open History" }
+      );
   }
 
-  otherCategory.button("Settings", "textures/ui/debug_glyph_color", () => settings_main(player));
+  form.button(
+      "Settings",
+      async () => {
+          form.close();
+          system.run(() => settings_main(player));
+      },
+      { tooltip: "Open Settings" }
+  );
 
   if (system_privileges !== 2) {
-    otherCategory.backbutton(
-      () => {
-        world.scoreboard.addObjective("mm_data");
-        world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
-        player.runCommand("scriptevent multiple_menu:data");
-      }
-    );
+      form.button(
+          "Back",
+          async () => {
+              form.close();
+              world.scoreboard.addObjective("mm_data");
+              world.scoreboard.getObjective("mm_data").setScore(JSON.stringify({event: "mm_open", data:{target: "main"}}), 1);
+              player.runCommand("scriptevent multiple_menu:data");
+          },
+          { tooltip: "Go back" }
+      );
   }
 
-  return form;
+  form.show();
 }
 
 /*------------------------
@@ -8433,227 +8130,282 @@ function visual_command_gamemode(player, on_output) {
 -------------------------*/
 
 function settings_main(viewing_player, input_sd_index) {
-  let form = new ActionFormData();
-  let actions = [];
+  const form = new CustomForm(viewing_player, "Settings" + (input_sd_index !== undefined ? " - " + load_save_data()[input_sd_index].name : ""));
+  const save_data = load_save_data();
+  const player_sd_index = input_sd_index !== undefined ? input_sd_index : save_data.findIndex(entry => entry.id === viewing_player.id);
+  const is_admin_mode = input_sd_index !== undefined;
 
-  let save_data = load_save_data();
-  let player_sd_index = input_sd_index !== undefined ? input_sd_index : save_data.findIndex(entry => entry.id === viewing_player.id);
-  let is_admin_mode = input_sd_index !== undefined;
+  // Hilfsfunktion zum Aktualisieren der save_data
+  const updateSaveData = () => {
+      update_save_data(save_data);
+  };
 
-  form.title("Settings" + (is_admin_mode ? " - " + save_data[player_sd_index].name : ""));
-  form.body("Main Menu");
+  form.label("Main Menu Settings");
+  form.spacer();
 
   // Status
   const playerToCheck = is_admin_mode ? world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id) : null;
   if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0) && !operatorMode) {
-    form.button("Status\n" + (save_data[player_sd_index].allow_menu ? "§aon" : "§coff"), save_data[player_sd_index].allow_menu ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
-    actions.push(() => {
-      if (!save_data[player_sd_index].allow_menu) {
-        save_data[player_sd_index].allow_menu = true;
-      } else {
-        save_data[player_sd_index].allow_menu = false;
-      }
-      update_save_data(save_data);
-      settings_main(viewing_player, input_sd_index);
-    });
+      const allowMenuObservable = new ObservableBoolean(
+          save_data[player_sd_index].allow_menu,
+          { clientWritable: true }
+      );
+
+      allowMenuObservable.subscribe((value) => {
+          save_data[player_sd_index].allow_menu = value;
+          updateSaveData();
+      });
+
+      form.toggle(
+          "Allow Menu",
+          allowMenuObservable,
+          {
+              description: save_data[player_sd_index].allow_menu ? "§aEnabled" : "§cDisabled",
+              tooltip: "Toggle menu access for this player"
+          }
+      );
+      form.spacer();
   }
 
-  // Shortcuts
+  // Shortcuts & Recommendations
   if (canPlayerUseMenu(viewing_player, player_sd_index) && !(is_admin_mode && playerToCheck && playerToCheck.commandPermissionLevel >= 1) && (!is_admin_mode || !operatorMode)) {
-    form.button("Shortcuts", "textures/ui/sidebar_icons/emotes");
-    actions.push(() => {
-      settings_shortcuts(viewing_player, input_sd_index);
-    });
+      form.button(
+          "Shortcuts",
+          async () => {
+              form.close();
+              system.run(() => settings_shortcuts(viewing_player, input_sd_index));
+          },
+          { tooltip: "Manage shortcuts" }
+      );
+      form.spacer();
 
-  // Recommendations
-    form.button("Recommendations\n" + (save_data[player_sd_index].recommendations ? "§aon" : "§coff"), "textures/ui/realms_particles");
-    actions.push(() => {
-      if (!save_data[player_sd_index].recommendations) {
-        save_data[player_sd_index].recommendations = true;
-      } else {
-        save_data[player_sd_index].recommendations = false;
-      }
-      update_save_data(save_data);
-      settings_main(viewing_player, input_sd_index);
-    });
+      const recommendationsObservable = new ObservableBoolean(
+          save_data[player_sd_index].recommendations,
+          { clientWritable: true }
+      );
+
+      recommendationsObservable.subscribe((value) => {
+          save_data[player_sd_index].recommendations = value;
+          updateSaveData();
+      });
+
+      form.toggle(
+          "Recommendations",
+          recommendationsObservable,
+          {
+              description: save_data[player_sd_index].recommendations ? "§aEnabled" : "§cDisabled",
+              tooltip: "Toggle recommendations"
+          }
+      );
   } else if (!is_admin_mode) {
-    form.label("§7The Main menu is currently disabled.");
+      form.label("§7The Main menu is currently disabled.");
   } else if (operatorMode) {
-    form.label("§7Restrictions cannot be applied in operator mode.");
+      form.label("§7Restrictions cannot be applied in operator mode.");
   } else {
-    form.label("§7Restrictions cannot be applied to a(n) "+CommandPermissionLevel[world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id).commandPermissionLevel] + " player.");
+      form.label("§7Restrictions cannot be applied to a(n) " + CommandPermissionLevel[world.getAllPlayers().find(p => p.id === save_data[input_sd_index].id).commandPermissionLevel] + " player.");
   }
 
-  form.divider()
+  form.divider();
 
-  // Multiplayer
+  // Multiplayer (Admin-only)
   if (playerIsAdmin(viewing_player) && !is_admin_mode) {
-    form.label("Multiplayer");
+      form.label("Multiplayer");
+      form.spacer();
 
-    // Button 3: Permission
-    const players = world.getAllPlayers();
-    const playerMap = new Map(players.map(p => [p.id, p]));
-    const onlineIds = new Set(players.map(p => String(p.id)));
+      // Permission
+      const players = world.getAllPlayers();
+      const playerMap = new Map(players.map(p => [p.id, p]));
+      const onlineIds = new Set(players.map(p => String(p.id)));
 
-    const names = save_data.slice(1).sort((a, b) => {
-      const aOnline = onlineIds.has(String(a.id));
-      const bOnline = onlineIds.has(String(b.id));
+      const names = save_data.slice(1).sort((a, b) => {
+          const aOnline = onlineIds.has(String(a.id));
+          const bOnline = onlineIds.has(String(b.id));
+          const aOp = aOnline && playerMap.get(a.id)?.commandPermissionLevel >= 1;
+          const bOp = bOnline && playerMap.get(b.id)?.commandPermissionLevel >= 1;
 
-      const aOp = aOnline && playerMap.get(a.id)?.commandPermissionLevel >= 1;
-      const bOp = bOnline && playerMap.get(b.id)?.commandPermissionLevel >= 1;
+          if (aOnline && bOnline) {
+              if (aOp !== bOp) return aOp ? -1 : 1;
+              return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+          }
+          if (aOnline !== bOnline) return aOnline ? -1 : 1;
 
-      // 1️⃣ Online OP
-      if (aOnline && bOnline) {
-        if (aOp !== bOp) return aOp ? -1 : 1;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+          const lastLoginB = getLastLogin(b);
+          const lastLoginA = getLastLogin(a);
+          return lastLoginB - lastLoginA;
+      });
+
+      if (names.length > 1) {
+          const label = names.length > 1
+              ? names.slice(0, -1).map(n => n.name).join(", ") + " & " + names[names.length - 1].name
+              : names[0]?.name || "";
+
+          form.button(
+              `Permission\n§9${label}`,
+              async () => {
+                  form.close();
+                  system.run(() => settings_rights_main(viewing_player));
+              },
+              { tooltip: "Manage permissions" }
+          );
       }
 
-      // 2️⃣ Online vor Offline
-      if (aOnline !== bOnline) return aOnline ? -1 : 1;
+      // Logs
+      const logs = generate_logs(viewing_player);
+      form.button(
+          `Logs\n§9${logs.length} entries`,
+          async () => {
+              form.close();
+              system.run(() => multipage_time_menu(viewing_player, logs, (p) => settings_main(p)));
+          },
+          { tooltip: "View logs" }
+      );
 
-      // 3️⃣ Beide offline → zuletzt online zuerst
-      const lastLoginB = getLastLogin(b);
-      const lastLoginA = getLastLogin(a);
+      // Time Zone
+      let zone = timezone_list.find(zone => zone.utc === save_data[0].utc);
+      let zone_text = zone ? (zone.name.length > 30 ? zone.short : zone.name) : "Unknown";
 
-      return lastLoginB - lastLoginA;
-    });
-
-
-
-    if (names.length > 1) {
-      const label = names.length > 1
-        ? names.slice(0, -1).map(n => n.name).join(", ") + " & " + names[names.length - 1].name
-        : names[0]?.name || "";
-
-
-      form.button("Permission\n§9" + label, "textures/ui/lock_color");
-      actions.push(() => settings_rights_main(viewing_player));
-    }
-
-    // Button 4: Logs
-    let logs = generate_logs(viewing_player);
-
-    form.button("Logs\n§9" + (logs.length) + " entries", "textures/ui/copy");
-    actions.push(() => {
-      multipage_time_menu(viewing_player, logs, (viewing_player) => settings_main(viewing_player));
-    });
-
-    // Button 4: UTC
-    let zone = timezone_list.find(zone => zone.utc === save_data[0].utc), zone_text;
-
-    if (!zone) {
-      if (zone !== undefined) {
-        zone = timezone_list.reduce((closest, current) => {
-          const currentDiff = Math.abs(current.utc - save_data[0].utc);
-          const closestDiff = Math.abs(closest.utc - save_data[0].utc);
-          return currentDiff < closestDiff ? current : closest;
-        });
-        zone_text = "Prob. " + ("Prob. "+ zone.name.length > 30 ? zone.short : zone.name)
+      if (!zone && timezone_list.length > 0) {
+          zone = timezone_list.reduce((closest, current) => {
+              const currentDiff = Math.abs(current.utc - save_data[0].utc);
+              const closestDiff = Math.abs(closest.utc - save_data[0].utc);
+              return currentDiff < closestDiff ? current : closest;
+          });
+          zone_text = "Prob. " + (zone.name.length > 30 ? zone.short : zone.name);
       }
-    } else {
-      zone_text = zone.name.length > 30 ? zone.short : zone.name
-    }
 
-
-    form.button(("Time zone") + (zone !== undefined? "\n§9"+zone_text : ""), "textures/ui/world_glyph_color_2x")
-    actions.push(() => {
-      if (save_data[0].utc_auto) return settings_time_zone_preview(viewing_player, zone)
-      settings_time_zone(viewing_player, 0);
-    });
-    form.divider()
+      form.button(
+          `Time zone\n§9${zone_text}`,
+          async () => {
+              form.close();
+              if (save_data[0].utc_auto) {
+                  system.run(() => settings_time_zone_preview(viewing_player, zone));
+              } else {
+                  system.run(() => settings_time_zone(viewing_player, 0));
+              }
+          },
+          { tooltip: "Change time zone" }
+      );
+      form.divider();
   }
 
-  // Commands
+  // Commands (Admin Mode)
   if (is_admin_mode && (!playerToCheck || playerToCheck.commandPermissionLevel == 0) && !operatorMode) {
-    form.label("Commands");
-    let label = save_data[player_sd_index].allowed_commands.length > 0 ? "§9" + save_data[player_sd_index].allowed_commands.length + " allowed commands" : "";
-    form.button("Allowed commands\n" + label, "textures/ui/chat_send");
-    actions.push(() => {
-      manage_command(viewing_player, input_sd_index);
-    });
+      form.label("Commands");
+      form.spacer();
 
-    form.button("Allow Chains\n" + (save_data[player_sd_index].allow_chains ? "§aon" : "§coff"), save_data[player_sd_index].allow_chains ? "textures/ui/toggle_on" : "textures/ui/toggle_off");
-    actions.push(() => {
-      if (!save_data[player_sd_index].allow_chains) {
-        save_data[player_sd_index].allow_chains = true;
-      } else {
-        save_data[player_sd_index].allow_chains = false;
-      }
-      update_save_data(save_data);
-      settings_main(viewing_player, input_sd_index);
-    });
+      const allowedCommandsLabel = save_data[player_sd_index].allowed_commands.length > 0
+          ? `§9${save_data[player_sd_index].allowed_commands.length} allowed commands`
+          : "No commands allowed";
 
-    form.divider()
+      form.button(
+          `Allowed commands\n${allowedCommandsLabel}`,
+          async () => {
+              form.close();
+              system.run(() => manage_command(viewing_player, input_sd_index));
+          },
+          { tooltip: "Manage allowed commands" }
+      );
+
+      const allowChainsObservable = new ObservableBoolean(
+          save_data[player_sd_index].allow_chains,
+          { clientWritable: true }
+      );
+
+      allowChainsObservable.subscribe((value) => {
+          save_data[player_sd_index].allow_chains = value;
+          updateSaveData();
+      });
+
+      form.toggle(
+          "Allow Chains",
+          allowChainsObservable,
+          {
+              description: save_data[player_sd_index].allow_chains ? "§aEnabled" : "§cDisabled",
+              tooltip: "Toggle chain commands"
+          }
+      );
+      form.divider();
   }
 
-
-
+  // Other
   form.label("Other");
+  form.spacer();
 
-  // Storage
+  // Storage (Admin-only)
   if (playerIsAdmin(viewing_player)) {
-    if (is_admin_mode) {
-      form.button("Storage\n§9" + formatBytes(getBytesfromInput(save_data[input_sd_index]).bytes), "textures/ui/storageIconColor");
-      actions.push(() => {
-        settings_rights_manage_sd(viewing_player, save_data[input_sd_index]);
-      });
-    } else {
-      form.button("Storage\n§9" + formatBytes(world.getDynamicPropertyTotalByteCount()), "textures/ui/storageIconColor");
-      actions.push(() => {
-        settings_storage(viewing_player, input_sd_index);
-      });
-    }
+      if (is_admin_mode) {
+          form.button(
+              `Storage\n§9${formatBytes(getBytesfromInput(save_data[input_sd_index]).bytes)}`,
+              async () => {
+                  form.close();
+                  system.run(() => settings_rights_manage_sd(viewing_player, save_data[input_sd_index]));
+              },
+              { tooltip: "Manage storage for this player" }
+          );
+      } else {
+          form.button(
+              `Storage\n§9${formatBytes(world.getDynamicPropertyTotalByteCount())}`,
+              async () => {
+                  form.close();
+                  system.run(() => settings_storage(viewing_player, input_sd_index));
+              },
+              { tooltip: "View storage usage" }
+          );
+      }
   }
 
+  // Transfer Ownership (Server Mode)
   if (server_mode && is_admin_mode && playerIsAdmin(viewing_player) && !playerIsAdmin(input_sd_index)) {
-    form.button("§cTransfer ownership", "textures/ui/op");
-    actions.push(() => {
-      transfer_ownership(viewing_player, input_sd_index);
-    });
+      form.button(
+          "§cTransfer ownership",
+          async () => {
+              form.close();
+              system.run(() => transfer_ownership(viewing_player, input_sd_index));
+          },
+          { tooltip: "Transfer ownership of this player's data" }
+      );
   }
 
+  // Debug & About (Admin-only)
   if (!is_admin_mode && playerIsAdmin(viewing_player)) {
-    // Debug
-    if (version_info.release_type == 0 ) {
-      form.button("Debug\n", "textures/ui/ui_debug_glyph_color");
-      actions.push(() => {
-        debug_main(viewing_player);
-      });
-    }
+      if (version_info.release_type === 0) {
+          form.button(
+              "Debug",
+              async () => {
+                  form.close();
+                  system.run(() => debug_main(viewing_player));
+              },
+              { tooltip: "Open debug menu" }
+          );
+      }
 
-    // Dictionary
-    let latest_online_version = github_data? version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag : null
-    let update_text = github_data? (compareVersions(latest_online_version, version_info.version) !== 1? "" : "§9" + version_info.version +" -> "+ latest_online_version): Date.now() > (version_info.unix + version_info.update_message_period_unix)? "§9Update available!" : ""
+      let latest_online_version = github_data ? (version_info.release_type === 2 ? github_data.find(r => !r.prerelease)?.tag : github_data[0]?.tag) : null;
+      let update_text = github_data ? (compareVersions(latest_online_version, version_info.version) !== 1 ? "" : `§9${version_info.version} -> ${latest_online_version}`) : (Date.now() > (version_info.unix + version_info.update_message_period_unix) ? "§9Update available!" : "");
 
-    form.button("About\n"+update_text, "textures/ui/infobulb");
-    actions.push(() => {
-      is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player);
-    });
+      form.button(
+          `About\n${update_text}`,
+          async () => {
+              form.close();
+              system.run(() => is_admin_mode ? settings_rights_data(viewing_player, input_sd_index) : dictionary_about(viewing_player));
+          },
+          { tooltip: "About this addon" }
+      );
   }
 
-
-
-
-  // Back to main menu
+  // Back Button
   if (canPlayerUseMenu(viewing_player) || is_admin_mode) {
-    form.divider()
-    form.button("");
-    actions.push(() => {
-      is_admin_mode
-        ? settings_rights_main(viewing_player)
-        : main_menu(viewing_player);
-    });
+      form.divider();
+      form.button(
+          "Back",
+          async () => {
+              form.close();
+              system.run(() => is_admin_mode ? settings_rights_main(viewing_player) : main_menu(viewing_player));
+          },
+          { tooltip: "Go back" }
+      );
   }
 
-  form.show(viewing_player).then((response) => {
-    if (response.selection == undefined ) {
-      return -1
-    }
-
-    if (response.selection !== undefined && actions[response.selection]) {
-      actions[response.selection]();
-    }
-  });
+  form.show();
 }
 
 /*------------------------
@@ -8661,125 +8413,64 @@ function settings_main(viewing_player, input_sd_index) {
 -------------------------*/
 
 function manage_command(viewing_player, input_sd_index) {
-  let form = new ActionFormData()
-  let actions = [];
+  const form = new CustomForm(viewing_player, `Manage commands for ${load_save_data()[input_sd_index].name}`);
+  const save_data = load_save_data();
+  const selected_save_data = save_data[input_sd_index];
 
-  let save_data = load_save_data();
-  let selected_save_data = save_data[input_sd_index];
-
+  // Befehlsliste vorbereiten
   const cmdList = Array.isArray(command_list) ? command_list : [];
   const allowedIdxs = Array.isArray(selected_save_data.allowed_commands) ? selected_save_data.allowed_commands : [];
 
-  let allowedCommands = cmdList
-    .map((c, i) => ({ ...c, _index: i }))
-    .filter(item => allowedIdxs.includes(item._index));
 
-  let restrictedCommands = cmdList
-    .map((c, i) => ({ ...c, _index: i }))
-    .filter(item => !allowedIdxs.includes(item._index));
 
-  // Alphabetisch nach name sortieren
-  allowedCommands.sort((a, b) => a.name.localeCompare(b.name));
-  restrictedCommands.sort((a, b) => a.name.localeCompare(b.name));
+  // Funktion zum Aktualisieren der save_data
+  const updateAllowedCommands = (cmdIndex, shouldAllow) => {
+      const sd = load_save_data();
+      const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
+      if (saveIndex === -1) return;
 
-  form.title("Manage commands for " + selected_save_data.name);
-
-  // =========================
-  // Allowed commands
-  // =========================
-
-  let hasAllowed = false;
-  if (allowedCommands.length > 0) {
-    hasAllowed = true;
-
-    form.body(`§aAllowed commands (${allowedCommands.length}):`)
-        .divider();
-
-    allowedCommands.forEach((cmdObj) => {
-      form.button(`/${cmdObj.name}`);
-
-      actions.push(() => {
-        const sd = load_save_data();
-        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
-        if (saveIndex === -1) return;
-
-        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
+      sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
           ? sd[saveIndex].allowed_commands.slice()
           : [];
 
-        const cmdIdx = cmdObj._index;
-        const pos = sd[saveIndex].allowed_commands.indexOf(cmdIdx);
-        if (pos !== -1) {
-          sd[saveIndex].allowed_commands.splice(pos, 1);
-        }
+      if (shouldAllow && !sd[saveIndex].allowed_commands.includes(cmdIndex)) {
+          sd[saveIndex].allowed_commands.push(cmdIndex);
+      } else if (!shouldAllow && sd[saveIndex].allowed_commands.includes(cmdIndex)) {
+          sd[saveIndex].allowed_commands = sd[saveIndex].allowed_commands.filter(idx => idx !== cmdIndex);
+      }
+      update_save_data(sd);
+  };
 
-        update_save_data(sd);
-        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
-        return manage_command(viewing_player, saveIndex);
+  cmdList.forEach((cmdObj) => {
+      const isAllowed = allowedIdxs.includes(cmdObj._index);
+      const observable = new ObservableBoolean(isAllowed, { clientWritable: true });
+
+      observable.subscribe((value) => {
+          updateAllowedCommands(cmdObj._index, value);
       });
-    });
 
-    form.divider();
-  }
-
-  // =========================
-  // Restricted commands
-  // =========================
-
-  if (restrictedCommands.length > 0) {
-    if (hasAllowed) {
-      // Already used body, so use label here
-      form.label(`§cRestricted commands (${restrictedCommands.length}):`)
-          .divider();
-    } else {
-      // No allowed commands shown, so restricted gets the body
-      form.body(`§cRestricted commands (${restrictedCommands.length}):`)
-          .divider();
-    }
-
-    restrictedCommands.forEach((cmdObj) => {
-      form.button(`/${cmdObj.name}`);
-
-      actions.push(() => {
-        const sd = load_save_data();
-        const saveIndex = sd.findIndex(entry => entry.id === selected_save_data.id);
-        if (saveIndex === -1) return;
-
-        sd[saveIndex].allowed_commands = Array.isArray(sd[saveIndex].allowed_commands)
-          ? sd[saveIndex].allowed_commands.slice()
-          : [];
-
-        const cmdIdx = cmdObj._index;
-        if (!sd[saveIndex].allowed_commands.includes(cmdIdx)) {
-          sd[saveIndex].allowed_commands.push(cmdIdx);
-        }
-
-        update_save_data(sd);
-        selected_save_data.allowed_commands = sd[saveIndex].allowed_commands.slice();
-        return manage_command(viewing_player, saveIndex);
-      });
-    });
-
-    form.divider();
-  }
-
-  // =========================
-  // Back button
-  // =========================
-
-  form.button("");
-  actions.push(() => {
-    settings_main(viewing_player, input_sd_index);
+      form.toggle(
+          `/${cmdObj.name}`,
+          observable,
+          {
+              description: cmdObj.description,
+              tooltip: `Toggle command: ${cmdObj.name}`
+          }
+      );
   });
+  form.divider();
 
-  // Formular anzeigen und Auswahl ausführen
-  form.show(viewing_player).then(response => {
-    if (response.selection == undefined ) {
-      return -1
-    }
-    const action = actions[response.selection];
-    if (action) action();
-  });
+  // Zurück-Button
+  form.button(
+      "Back",
+      async () => {
+          form.close();
+          system.run(() => settings_main(viewing_player, input_sd_index));
+      },
+      { tooltip: "Go back to settings" }
+  );
+
+  form.show();
 }
 
 /*------------------------
